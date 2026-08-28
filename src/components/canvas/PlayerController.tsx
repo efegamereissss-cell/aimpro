@@ -8,7 +8,7 @@ import { soundEngine } from '../../audio/SoundEngine';
 import { WeaponViewmodel } from './WeaponViewmodel';
 
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
-const MAX_PITCH = Math.PI / 2 - 0.01; // ~89.4 degrees
+const MAX_PITCH = 1.553; // ~89.0 degrees (prevents zenith lock)
 
 export const PlayerController: React.FC = () => {
   const { camera, gl, scene } = useThree();
@@ -37,6 +37,10 @@ export const PlayerController: React.FC = () => {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
+  // Pure scalar accumulators for 100% singularity-free rotation
+  const yawRef = useRef(0);
+  const pitchRef = useRef(0);
+
   const mouseDeltaRef = useRef({ x: 0, y: 0 });
   const keysRef = useRef({
     forward: false,
@@ -57,6 +61,8 @@ export const PlayerController: React.FC = () => {
   // Base camera setup
   useEffect(() => {
     camera.position.set(0, 1.7, 0); // Standard FPS eye height (1.7m)
+    yawRef.current = 0;
+    pitchRef.current = 0;
     _euler.set(0, 0, 0, 'YXZ');
     camera.quaternion.setFromEuler(_euler);
   }, [camera]);
@@ -141,12 +147,12 @@ export const PlayerController: React.FC = () => {
     }
   }, [gl]);
 
-  // STABLE Event Listeners
+  // STABLE Event Listeners - Pure scalar camera integration with ZERO Euler flip
   useEffect(() => {
-    let ignoreInitialDeltas = 0;
+    let ignoreTicks = 0;
 
     const handlePointerLockChange = () => {
-      ignoreInitialDeltas = 3;
+      ignoreTicks = 3;
       mouseDeltaRef.current = { x: 0, y: 0 };
       if (document.pointerLockElement !== gl.domElement) {
         if (gameStatusRef.current === 'playing') {
@@ -158,15 +164,16 @@ export const PlayerController: React.FC = () => {
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement) return;
 
-      if (ignoreInitialDeltas > 0) {
-        ignoreInitialDeltas--;
+      if (ignoreTicks > 0) {
+        ignoreTicks--;
         return;
       }
 
       const deltaX = e.movementX || 0;
       const deltaY = e.movementY || 0;
 
-      if (Math.abs(deltaX) > 350 || Math.abs(deltaY) > 350) {
+      // Filter hardware or browser sudden recenter glitch
+      if (Math.abs(deltaX) > 300 || Math.abs(deltaY) > 300) {
         return;
       }
 
@@ -180,15 +187,15 @@ export const PlayerController: React.FC = () => {
       const radX = calculateMouseRadians(deltaX, sens * adsFactor, preset);
       const radY = calculateMouseRadians(deltaY, sens * adsFactor, preset);
 
-      // True Gimbal-Lock Free Quaternion rotation
-      _euler.setFromQuaternion(camera.quaternion, 'YXZ');
-      _euler.y -= radX;
-      _euler.x -= currentSettings.controls.invertY ? -radY : radY;
+      // Pure scalar accumulation (impossible to gimbal flip or snap)
+      yawRef.current -= radX;
+      pitchRef.current -= currentSettings.controls.invertY ? -radY : radY;
 
-      // Clamp vertical pitch [-89.4 deg, 89.4 deg]
-      _euler.x = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, _euler.x));
-      _euler.z = 0;
+      // Clamp vertical pitch [-89.0 deg, 89.0 deg]
+      pitchRef.current = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitchRef.current));
 
+      // Deterministic 1-way Euler to Quaternion
+      _euler.set(pitchRef.current, yawRef.current, 0, 'YXZ');
       camera.quaternion.setFromEuler(_euler);
     };
 
@@ -271,9 +278,7 @@ export const PlayerController: React.FC = () => {
 
       if (moveDir.lengthSq() > 0) {
         moveDir.normalize();
-        // Transform direction to camera horizontal orientation
-        const camEuler = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(camera.quaternion);
-        moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), camEuler.y);
+        moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
       }
 
       // Acceleration & Friction physics
@@ -284,7 +289,6 @@ export const PlayerController: React.FC = () => {
       if (moveDir.lengthSq() > 0) {
         velocityRef.current.x += moveDir.x * accel * delta;
         velocityRef.current.z += moveDir.z * accel * delta;
-        // Clamp horizontal velocity
         const hVel = new THREE.Vector2(velocityRef.current.x, velocityRef.current.z);
         if (hVel.length() > maxSpeed) {
           hVel.setLength(maxSpeed);
@@ -292,14 +296,13 @@ export const PlayerController: React.FC = () => {
           velocityRef.current.z = hVel.y;
         }
       } else {
-        // Apply ground friction deceleration
         velocityRef.current.x = THREE.MathUtils.lerp(velocityRef.current.x, 0, delta * friction);
         velocityRef.current.z = THREE.MathUtils.lerp(velocityRef.current.z, 0, delta * friction);
       }
 
       // Jump & Gravity Physics
-      const gravity = 18.0; // m/s^2
-      const jumpImpulse = 5.8; // m/s
+      const gravity = 18.0;
+      const jumpImpulse = 5.8;
 
       if (keys.jump && isGroundedRef.current) {
         velocityRef.current.y = jumpImpulse;
@@ -315,7 +318,7 @@ export const PlayerController: React.FC = () => {
       camera.position.y += velocityRef.current.y * delta;
       camera.position.z += velocityRef.current.z * delta;
 
-      // Ground collision (eye height: 1.7m)
+      // Ground collision
       if (camera.position.y <= 1.7) {
         camera.position.y = 1.7;
         velocityRef.current.y = 0;
@@ -333,7 +336,7 @@ export const PlayerController: React.FC = () => {
       y: THREE.MathUtils.lerp(mouseDeltaRef.current.y, 0, delta * 20)
     };
 
-    // 3. Continuous Firing / Tracking Handling
+    // 3. Continuous Tracking Handling
     if (isMouseDownRef.current && gameStatusRef.current === 'playing') {
       const currentScenario = activeScenarioRef.current;
       const targets = activeTargetsRef.current;
