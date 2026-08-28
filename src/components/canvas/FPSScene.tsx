@@ -2,17 +2,21 @@ import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Arena } from './Arena';
+import { BhopParkourMap } from './BhopParkourMap';
 import { PlayerController } from './PlayerController';
 import { TargetManager } from './TargetManager';
 import { ParticleSystem } from './ParticleSystem';
 import { FloatingText3D } from './FloatingText3D';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useGameStore } from '../../store/useGameStore';
 import { getEffectiveVerticalFov } from '../../utils/sensitivity';
 
 export const FPSScene: React.FC = () => {
   const videoSettings = useSettingsStore(state => state.settings.video);
+  const activeScenario = useGameStore(state => state.activeScenario);
 
   const effectiveFov = getEffectiveVerticalFov(videoSettings.fov);
+  const isBhopMap = activeScenario.id.includes('bhop');
 
   return (
     <div className="w-full h-full relative select-none bg-[#070a10]">
@@ -20,8 +24,8 @@ export const FPSScene: React.FC = () => {
         camera={{
           fov: effectiveFov,
           near: 0.05,
-          far: 120,
-          position: [0, 1.7, 0]
+          far: 140,
+          position: [0, 2.7, 0]
         }}
         dpr={[1, 2]} // Crisp retina DPR without pixelation
         shadows={{
@@ -47,11 +51,11 @@ export const FPSScene: React.FC = () => {
           shadow-mapSize-width={4096}
           shadow-mapSize-height={4096}
           shadow-camera-near={0.5}
-          shadow-camera-far={70}
-          shadow-camera-left={-26}
-          shadow-camera-right={26}
-          shadow-camera-top={26}
-          shadow-camera-bottom={-26}
+          shadow-camera-far={80}
+          shadow-camera-left={-30}
+          shadow-camera-right={30}
+          shadow-camera-top={30}
+          shadow-camera-bottom={-30}
           shadow-bias={-0.0001}
         />
 
@@ -62,7 +66,7 @@ export const FPSScene: React.FC = () => {
           color="#00f0ff"
         />
 
-        {/* Deep Indigo Ground Fill Light */}
+        {/* Deep Ground Fill Light */}
         <directionalLight
           position={[0, -10, 0]}
           intensity={0.25}
@@ -70,7 +74,7 @@ export const FPSScene: React.FC = () => {
         />
 
         <Suspense fallback={null}>
-          <Arena />
+          {isBhopMap ? <BhopParkourMap /> : <Arena />}
           <TargetManager />
           <ParticleSystem />
           <FloatingText3D />

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../../store/useGameStore';
 import { CrosshairRenderer } from '../ui/CrosshairRenderer';
-import { Flame, Target, Zap, Clock, ShieldAlert, Sparkles, Trophy } from 'lucide-react';
+import { Flame, Target, Zap, Clock, ShieldAlert, Sparkles, Trophy, Gauge, Activity } from 'lucide-react';
 
 export const GameHUD: React.FC = () => {
   const scenario = useGameStore(state => state.activeScenario);
@@ -21,6 +21,7 @@ export const GameHUD: React.FC = () => {
 
   const isLowTime = timeRemaining <= 10;
   const showHitmarker = lastHitmarker && Date.now() - lastHitmarker.timestamp < 120;
+  const isBhopMode = scenario.id.includes('bhop') || scenario.category === 'strafing';
 
   return (
     <div className="fixed inset-0 pointer-events-none z-30 select-none flex flex-col justify-between p-6 md:p-8">
@@ -96,7 +97,7 @@ export const GameHUD: React.FC = () => {
         </div>
       )}
 
-      {/* Bottom Bar: Interactive Weapon Slots & Keybindings */}
+      {/* Bottom Bar: Interactive Weapon Slots, Speedometer & Keybindings */}
       <div className="w-full flex items-center justify-between text-xs font-bold text-cyber-muted tracking-wider uppercase">
         <div className="flex items-center gap-2.5 pointer-events-auto">
           {/* Slot 1: Gun */}
@@ -127,16 +128,14 @@ export const GameHUD: React.FC = () => {
             <kbd className="text-cyber-primary font-mono font-black">F</kbd> Inspect Spin
           </span>
           <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
-            <kbd className="text-cyber-primary font-mono font-black">ESC</kbd> Pause
-          </span>
-          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
-            <kbd className="text-cyber-primary font-mono font-black">R</kbd> Restart
+            <kbd className="text-cyber-primary font-mono font-black">SPACE / WHEEL</kbd> Bhop Jump
           </span>
         </div>
 
-        <div className="flex items-center gap-2 text-cyber-primary font-bold">
-          <ShieldAlert className="w-4 h-4" />
-          <span>AIMPRO 2.0 ULTIMATE</span>
+        {/* CS 1.6 Movement Mode Active Badge */}
+        <div className="flex items-center gap-2 text-emerald-400 font-mono font-black bg-cyber-card/90 px-3.5 py-1.5 rounded-xl border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+          <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <span>CS 1.6 AIR-ACCELERATE: ON</span>
         </div>
       </div>
     </div>

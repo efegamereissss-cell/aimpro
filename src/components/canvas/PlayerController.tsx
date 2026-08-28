@@ -4,11 +4,13 @@ import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { calculateMouseRadians } from '../../utils/sensitivity';
+import { calculateAirAcceleration, CS_16_CONFIG } from '../../utils/movementPhysics';
+import { BHOP_PLATFORMS } from './BhopParkourMap';
 import { soundEngine } from '../../audio/SoundEngine';
 import { WeaponViewmodel } from './WeaponViewmodel';
 
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
-const MAX_PITCH = 1.553; // ~89.0 degrees (prevents zenith lock)
+const MAX_PITCH = 1.553;
 
 export const PlayerController: React.FC = () => {
   const { camera, gl, scene } = useThree();
@@ -42,11 +44,12 @@ export const PlayerController: React.FC = () => {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  // Pure scalar accumulators for 100% singularity-free rotation
+  // Pure scalar accumulators
   const yawRef = useRef(0);
   const pitchRef = useRef(0);
 
   const mouseDeltaRef = useRef({ x: 0, y: 0 });
+  const rawMouseDeltaX = useRef(0);
   const keysRef = useRef({
     forward: false,
     backward: false,
@@ -55,7 +58,7 @@ export const PlayerController: React.FC = () => {
     jump: false
   });
 
-  // Kinematic Physics Engine State
+  // Kinematic CS 1.6 Movement Physics Engine State
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
   const isGroundedRef = useRef(true);
   const isMouseDownRef = useRef(false);
@@ -63,14 +66,18 @@ export const PlayerController: React.FC = () => {
   const lastShotTimeRef = useRef(0);
   const raycaster = useRef(new THREE.Raycaster());
 
+  // Checkpoint respawn location
+  const lastCheckpointPos = useRef(new THREE.Vector3(0, 2.7, 0));
+
   // Base camera setup
   useEffect(() => {
-    camera.position.set(0, 1.7, 0); // Standard FPS eye height (1.7m)
+    camera.position.set(0, 2.7, 0);
     yawRef.current = 0;
     pitchRef.current = 0;
+    velocityRef.current.set(0, 0, 0);
     _euler.set(0, 0, 0, 'YXZ');
     camera.quaternion.setFromEuler(_euler);
-  }, [camera]);
+  }, [camera, activeScenario]);
 
   const handleFire = useCallback(() => {
     if (gameStatusRef.current !== 'playing') return;
@@ -91,11 +98,9 @@ export const PlayerController: React.FC = () => {
       soundEngine.playGunshot(currentScenario.weaponType);
     }
 
-    // Cast Ray from center of screen (0, 0)
     raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
     const ray = raycaster.current.ray;
 
-    // 1. Raycast Three.js scene objects
     const intersects = raycaster.current.intersectObjects(scene.children, true);
     let hitTargetId: string | null = null;
     let hitPoint: [number, number, number] | null = null;
@@ -111,7 +116,6 @@ export const PlayerController: React.FC = () => {
       }
     }
 
-    // 2. Exact mathematical Ray-Sphere test fallback
     if (!hitTargetId && targets.length > 0) {
       for (const target of targets) {
         const center = new THREE.Vector3(...target.position);
@@ -138,7 +142,6 @@ export const PlayerController: React.FC = () => {
         );
       }
     } else {
-      // Missed shot
       registerShot();
       if (currentSlot !== 'knife') {
         const missPos = ray.origin.clone().add(ray.direction.clone().multiplyScalar(40));
@@ -154,14 +157,13 @@ export const PlayerController: React.FC = () => {
   const handleFireRef = useRef(handleFire);
   handleFireRef.current = handleFire;
 
-  // Pointer Lock request helper
   const requestLock = useCallback(() => {
     if (document.pointerLockElement !== gl.domElement) {
       gl.domElement.requestPointerLock();
     }
   }, [gl]);
 
-  // STABLE Event Listeners
+  // Event Listeners
   useEffect(() => {
     let ignoreTicks = 0;
 
@@ -193,6 +195,7 @@ export const PlayerController: React.FC = () => {
       }
 
       mouseDeltaRef.current = { x: deltaX, y: deltaY };
+      rawMouseDeltaX.current = deltaX;
 
       const currentSettings = settingsRef.current;
       const sens = currentSettings.controls.inGameSens;
@@ -236,6 +239,16 @@ export const PlayerController: React.FC = () => {
       }
     };
 
+    const handleWheel = (e: WheelEvent) => {
+      // Auto-bhop mousewheel jump
+      if (gameStatusRef.current === 'playing' && e.deltaY !== 0) {
+        keysRef.current.jump = true;
+        setTimeout(() => {
+          keysRef.current.jump = false;
+        }, 120);
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (gameStatusRef.current !== 'playing') return;
 
@@ -275,6 +288,7 @@ export const PlayerController: React.FC = () => {
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('wheel', handleWheel, { passive: true });
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
@@ -283,71 +297,141 @@ export const PlayerController: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('wheel', handleWheel);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [camera, gl, requestLock, pauseGame, restartGame, setWeaponSlot]);
 
-  // Main Simulation Loop
+  // Main Simulation Loop with CS 1.6 Air-Accelerate & Parkour Physics
   useFrame((_, delta) => {
     if (gameStatusRef.current === 'playing') {
       tickGame(delta);
 
       const keys = keysRef.current;
-      const moveDir = new THREE.Vector3();
+      const isBhopScenario = activeScenarioRef.current.category === 'strafing' || activeScenarioRef.current.id.includes('bhop');
 
-      if (keys.forward) moveDir.z -= 1;
-      if (keys.backward) moveDir.z += 1;
-      if (keys.left) moveDir.x -= 1;
-      if (keys.right) moveDir.x += 1;
+      // 1. Wish Direction in Camera Space
+      const wishDir = new THREE.Vector3();
+      if (keys.forward) wishDir.z -= 1;
+      if (keys.backward) wishDir.z += 1;
+      if (keys.left) wishDir.x -= 1;
+      if (keys.right) wishDir.x += 1;
 
-      if (moveDir.lengthSq() > 0) {
-        moveDir.normalize();
-        moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
+      if (wishDir.lengthSq() > 0) {
+        wishDir.normalize();
+        wishDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
       }
 
-      const accel = 35.0;
-      const friction = 12.0;
-      const maxSpeed = isADSDownRef.current ? 3.0 : 6.2;
+      // 2. CS 1.6 / Source Ground vs Air Acceleration
+      if (isGroundedRef.current) {
+        // Ground Friction
+        const currentSpeed = new THREE.Vector2(velocityRef.current.x, velocityRef.current.z).length();
+        if (currentSpeed > 0) {
+          const drop = currentSpeed * CS_16_CONFIG.groundFriction * delta;
+          const newSpeed = Math.max(0, currentSpeed - drop);
+          velocityRef.current.x *= newSpeed / currentSpeed;
+          velocityRef.current.z *= newSpeed / currentSpeed;
+        }
 
-      if (moveDir.lengthSq() > 0) {
-        velocityRef.current.x += moveDir.x * accel * delta;
-        velocityRef.current.z += moveDir.z * accel * delta;
-        const hVel = new THREE.Vector2(velocityRef.current.x, velocityRef.current.z);
-        if (hVel.length() > maxSpeed) {
-          hVel.setLength(maxSpeed);
-          velocityRef.current.x = hVel.x;
-          velocityRef.current.z = hVel.y;
+        // Ground Accelerate
+        if (wishDir.lengthSq() > 0) {
+          velocityRef.current.x += wishDir.x * CS_16_CONFIG.groundAccel * delta;
+          velocityRef.current.z += wishDir.z * CS_16_CONFIG.groundAccel * delta;
+          const hVel = new THREE.Vector2(velocityRef.current.x, velocityRef.current.z);
+          if (hVel.length() > CS_16_CONFIG.groundMaxSpeed) {
+            hVel.setLength(CS_16_CONFIG.groundMaxSpeed);
+            velocityRef.current.x = hVel.x;
+            velocityRef.current.z = hVel.y;
+          }
+        }
+
+        // Jump Execution
+        if (keys.jump) {
+          velocityRef.current.y = CS_16_CONFIG.jumpImpulse;
+          isGroundedRef.current = false;
         }
       } else {
-        velocityRef.current.x = THREE.MathUtils.lerp(velocityRef.current.x, 0, delta * friction);
-        velocityRef.current.z = THREE.MathUtils.lerp(velocityRef.current.z, 0, delta * friction);
+        // In the Air: CS 1.6 Strafe-Jump Air Acceleration Math
+        if (wishDir.lengthSq() > 0) {
+          calculateAirAcceleration(velocityRef.current, wishDir, delta, CS_16_CONFIG);
+        }
+
+        // Gravity
+        velocityRef.current.y -= CS_16_CONFIG.gravity * delta;
       }
 
-      const gravity = 18.0;
-      const jumpImpulse = 5.8;
-
-      if (keys.jump && isGroundedRef.current) {
-        velocityRef.current.y = jumpImpulse;
-        isGroundedRef.current = false;
-      }
-
-      if (!isGroundedRef.current) {
-        velocityRef.current.y -= gravity * delta;
-      }
-
+      // 3. Integrate Position
       camera.position.x += velocityRef.current.x * delta;
       camera.position.y += velocityRef.current.y * delta;
       camera.position.z += velocityRef.current.z * delta;
 
-      if (camera.position.y <= 1.7) {
-        camera.position.y = 1.7;
-        velocityRef.current.y = 0;
-        isGroundedRef.current = true;
+      // 4. Platform Collision Checking (Bhop Parkour Map)
+      let onPlatform = false;
+      let platformTopY = 0;
+
+      if (isBhopScenario) {
+        const pX = camera.position.x;
+        const pY = camera.position.y - 1.7; // feet height
+        const pZ = camera.position.z;
+
+        for (const plat of BHOP_PLATFORMS) {
+          const [platX, platY, platZ] = plat.position;
+          const [w, h, d] = plat.size;
+          const halfW = w / 2 + 0.3;
+          const halfD = d / 2 + 0.3;
+          const topSurface = platY + h / 2;
+
+          if (
+            pX >= platX - halfW &&
+            pX <= platX + halfW &&
+            pZ >= platZ - halfD &&
+            pZ <= platZ + halfD &&
+            pY >= topSurface - 0.4 &&
+            pY <= topSurface + 0.35 &&
+            velocityRef.current.y <= 0
+          ) {
+            onPlatform = true;
+            platformTopY = topSurface + 1.7;
+
+            // Speed booster pad
+            if (plat.isBooster) {
+              const boostDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
+              velocityRef.current.x += boostDir.x * 8.0;
+              velocityRef.current.z += boostDir.z * 8.0;
+              velocityRef.current.y = 8.5; // mega jump launch
+            }
+
+            if (plat.isCheckpoint) {
+              lastCheckpointPos.current.set(platX, topSurface + 1.7, platZ);
+            }
+            break;
+          }
+        }
+
+        // Fall into void reset
+        if (camera.position.y < -3.0) {
+          camera.position.copy(lastCheckpointPos.current);
+          velocityRef.current.set(0, 0, 0);
+          isGroundedRef.current = true;
+        }
+      } else {
+        // Standard Arena Floor Collision
+        if (camera.position.y <= 1.7) {
+          onPlatform = true;
+          platformTopY = 1.7;
+        }
+        camera.position.x = THREE.MathUtils.clamp(camera.position.x, -21, 21);
+        camera.position.z = THREE.MathUtils.clamp(camera.position.z, -14, 14);
       }
 
-      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -18, 18);
-      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -10, 10);
+      if (onPlatform) {
+        camera.position.y = platformTopY;
+        velocityRef.current.y = 0;
+        isGroundedRef.current = true;
+      } else if (camera.position.y > platformTopY) {
+        isGroundedRef.current = false;
+      }
     }
 
     mouseDeltaRef.current = {
