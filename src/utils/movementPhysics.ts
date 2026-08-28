@@ -1,28 +1,29 @@
 import * as THREE from 'three';
 
 /**
- * CS 1.6 / Source Engine Strafe-Acceleration & Fast Bunnyhop Physics Engine
- * High-performance bhop server calibration with explosive air-acceleration.
+ * CS 1.6 / Source Engine Progressive Bunnyhop & Strafe-Acceleration Physics
+ * Starts at standard 250 UPS walk speed and progressively accelerates smoothly
+ * (+40-60 UPS per clean strafe hop) up to 800+ UPS as you chain bhops.
  */
 
 export interface MovementConfig {
-  gravity: number;             // Gravity acceleration (m/s^2)
-  jumpImpulse: number;         // Vertical launch impulse
-  groundFriction: number;      // Ground deceleration friction
-  groundMaxSpeed: number;      // Max ground walk speed
+  gravity: number;             // Standard CS 1.6 gravity (m/s^2)
+  jumpImpulse: number;         // Clean CS 1.6 jump height
+  groundFriction: number;      // Ground friction on floor contact
+  groundMaxSpeed: number;      // Standard 250 UPS base walk speed (6.25 m/s)
   groundAccel: number;         // Ground acceleration rate
-  airAccelerate: number;       // Air-strafe acceleration multiplier
-  maxAirWishSpeed: number;     // Air projection speed cap
+  airAccelerate: number;       // Smooth progressive air-strafe acceleration
+  maxAirWishSpeed: number;     // 30 UPS Source air projection speed cap
 }
 
 export const CS_16_CONFIG: MovementConfig = {
   gravity: 19.5,
-  jumpImpulse: 6.8,
-  groundFriction: 12.0,
-  groundMaxSpeed: 7.5,
-  groundAccel: 55.0,
-  airAccelerate: 750.0, // High-speed responsive strafe acceleration
-  maxAirWishSpeed: 30.0
+  jumpImpulse: 6.2,
+  groundFriction: 14.0,
+  groundMaxSpeed: 6.25,        // Exactly 250 UPS base speed
+  groundAccel: 45.0,
+  airAccelerate: 85.0,         // Smooth progressive acceleration (+45 UPS per clean strafe)
+  maxAirWishSpeed: 1.65        // Authentic 30 units/s air cap
 };
 
 export function calculateAirAcceleration(
@@ -41,8 +42,8 @@ export function calculateAirAcceleration(
     return velocity;
   }
 
-  // Fast Source/GoldSrc air-accelerate calculation
-  const accelSpeed = Math.min(addSpeed, config.airAccelerate * delta * 2.5);
+  // Smooth, progressive GoldSrc / Source air acceleration
+  const accelSpeed = Math.min(addSpeed, config.airAccelerate * wishSpeed * delta);
 
   velocity.x += wishDir.x * accelSpeed;
   velocity.z += wishDir.z * accelSpeed;

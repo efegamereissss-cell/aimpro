@@ -242,7 +242,6 @@ export const PlayerController: React.FC = () => {
     };
 
     const handleWheel = (e: WheelEvent) => {
-      // Auto-bhop mousewheel jump
       if (gameStatusRef.current === 'playing' && e.deltaY !== 0) {
         keysRef.current.jump = true;
         setTimeout(() => {
@@ -305,7 +304,7 @@ export const PlayerController: React.FC = () => {
     };
   }, [camera, gl, requestLock, pauseGame, restartGame, setWeaponSlot]);
 
-  // Main Simulation Loop with Continuous Collision & Fast Strafe-Jump Acceleration
+  // Main Simulation Loop with Smooth Progressive Acceleration & Continuous Swept Collision
   useFrame((_, delta) => {
     if (gameStatusRef.current === 'playing') {
       tickGame(delta);
@@ -325,7 +324,7 @@ export const PlayerController: React.FC = () => {
         wishDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
       }
 
-      // 2. CS 1.6 / Source Ground vs Air Acceleration
+      // 2. Ground vs Air Acceleration
       if (isGroundedRef.current) {
         // Ground Friction
         const currentSpeed = new THREE.Vector2(velocityRef.current.x, velocityRef.current.z).length();
@@ -336,7 +335,7 @@ export const PlayerController: React.FC = () => {
           velocityRef.current.z *= newSpeed / currentSpeed;
         }
 
-        // Ground Accelerate
+        // Ground Accelerate (Starts at standard 250 UPS base walk)
         if (wishDir.lengthSq() > 0) {
           velocityRef.current.x += wishDir.x * CS_16_CONFIG.groundAccel * delta;
           velocityRef.current.z += wishDir.z * CS_16_CONFIG.groundAccel * delta;
@@ -348,13 +347,13 @@ export const PlayerController: React.FC = () => {
           }
         }
 
-        // Jump Execution (Instantaneous Auto-Bhop)
+        // Jump Execution
         if (keys.jump) {
           velocityRef.current.y = CS_16_CONFIG.jumpImpulse;
           isGroundedRef.current = false;
         }
       } else {
-        // In the Air: High-Speed CS 1.6 Strafe-Jump Air Acceleration Math
+        // In the Air: Progressive CS 1.6 Strafe-Jump Air Acceleration Math
         if (wishDir.lengthSq() > 0) {
           calculateAirAcceleration(velocityRef.current, wishDir, delta, CS_16_CONFIG);
         }
@@ -388,27 +387,25 @@ export const PlayerController: React.FC = () => {
           const halfD = d / 2 + 0.45;
           const topSurface = platY + h / 2;
 
-          // Check if horizontal position is inside platform bounds
           if (
             pX >= platX - halfW &&
             pX <= platX + halfW &&
             pZ >= platZ - halfD &&
             pZ <= platZ + halfD
           ) {
-            // Swept vertical landing test: fell through or standing on top surface
-            const isSweepingLanding = prevY >= topSurface - 0.2 && pY <= topSurface + 0.45;
-            const isCurrentlyOnTop = pY >= topSurface - 0.25 && pY <= topSurface + 0.6;
+            const isSweepingLanding = prevY >= topSurface - 0.25 && pY <= topSurface + 0.5;
+            const isCurrentlyOnTop = pY >= topSurface - 0.3 && pY <= topSurface + 0.65;
 
             if ((isSweepingLanding || isCurrentlyOnTop) && velocityRef.current.y <= 0.1) {
               onPlatform = true;
               platformTopY = topSurface + 1.7;
 
-              // Speed booster pad
+              // Speed booster pad (Smooth launch arc)
               if (plat.isBooster) {
                 const boostDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
-                velocityRef.current.x = boostDir.x * 16.0;
-                velocityRef.current.z = boostDir.z * 16.0;
-                velocityRef.current.y = 9.5;
+                velocityRef.current.x += boostDir.x * 6.5;
+                velocityRef.current.z += boostDir.z * 6.5;
+                velocityRef.current.y = 7.2;
                 isGroundedRef.current = false;
               }
 
