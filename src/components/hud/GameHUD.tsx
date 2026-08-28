@@ -12,6 +12,8 @@ export const GameHUD: React.FC = () => {
   const streak = useGameStore(state => state.currentStreak);
   const targetsDestroyed = useGameStore(state => state.targetsDestroyed);
   const lastHitmarker = useGameStore(state => state.lastHitmarker);
+  const activeWeaponSlot = useGameStore(state => state.activeWeaponSlot);
+  const setWeaponSlot = useGameStore(state => state.setWeaponSlot);
 
   const accuracy = shotsFired > 0 ? Math.round((shotsHit / shotsFired) * 1000) / 10 : 100;
   const elapsed = Math.max(scenario.duration - timeRemaining, 0.1);
@@ -22,11 +24,10 @@ export const GameHUD: React.FC = () => {
 
   return (
     <div className="fixed inset-0 pointer-events-none z-30 select-none flex flex-col justify-between p-6 md:p-8">
-      {/* Top Corners Layout (Center is 100% clean for aiming) */}
+      {/* Top Corners Layout */}
       <div className="w-full flex items-start justify-between">
         {/* TOP-LEFT CORNER: Tactical Scenario Info & Circular/Digital Timer */}
         <div className="flex items-center gap-4 glass-panel rounded-3xl p-4 border border-cyber-border/80 shadow-2xl backdrop-blur-md">
-          {/* Round Timer Badge */}
           <div
             className={`w-16 h-16 rounded-2xl flex flex-col items-center justify-center border shadow-lg transition-colors ${
               isLowTime
@@ -69,7 +70,6 @@ export const GameHUD: React.FC = () => {
             </span>
           </div>
 
-          {/* Flame Streak Indicator */}
           <div className="w-16 h-16 rounded-2xl bg-cyber-card/90 border border-cyber-border flex flex-col items-center justify-center shadow-lg">
             <Flame className={`w-6 h-6 ${streak >= 6 ? 'text-cyber-accent animate-bounce' : 'text-cyber-warning'}`} />
             <span className="font-mono font-black text-xs text-white mt-0.5">x{streak}</span>
@@ -77,7 +77,7 @@ export const GameHUD: React.FC = () => {
         </div>
       </div>
 
-      {/* Center Dynamic Crosshair (Completely Unobstructed) */}
+      {/* Center Dynamic Crosshair */}
       <CrosshairRenderer />
 
       {/* Center 2D Hitmarker Animation */}
@@ -96,15 +96,33 @@ export const GameHUD: React.FC = () => {
         </div>
       )}
 
-      {/* Bottom Bar: Keybindings & Brand */}
+      {/* Bottom Bar: Interactive Weapon Slots & Keybindings */}
       <div className="w-full flex items-center justify-between text-xs font-bold text-cyber-muted tracking-wider uppercase">
-        <div className="flex items-center gap-2.5">
-          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
-            <kbd className="text-cyber-primary font-mono font-black">1</kbd> Gun
-          </span>
-          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
-            <kbd className="text-emerald-400 font-mono font-black">3</kbd> RGX Blade
-          </span>
+        <div className="flex items-center gap-2.5 pointer-events-auto">
+          {/* Slot 1: Gun */}
+          <button
+            onClick={() => setWeaponSlot('gun')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all ${
+              activeWeaponSlot === 'gun'
+                ? 'bg-cyber-primary text-black font-black border-cyber-primary shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                : 'bg-cyber-card/90 text-white border-cyber-border hover:border-cyber-primary'
+            }`}
+          >
+            <kbd className="font-mono font-black">1</kbd> Gun Blaster
+          </button>
+
+          {/* Slot 3: RGX Karambit */}
+          <button
+            onClick={() => setWeaponSlot('knife')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all ${
+              activeWeaponSlot === 'knife'
+                ? 'bg-emerald-400 text-black font-black border-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.6)]'
+                : 'bg-cyber-card/90 text-white border-cyber-border hover:border-emerald-400'
+            }`}
+          >
+            <kbd className="font-mono font-black">3</kbd> RGX 11z Blade
+          </button>
+
           <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
             <kbd className="text-cyber-primary font-mono font-black">F</kbd> Inspect Spin
           </span>
@@ -115,6 +133,7 @@ export const GameHUD: React.FC = () => {
             <kbd className="text-cyber-primary font-mono font-black">R</kbd> Restart
           </span>
         </div>
+
         <div className="flex items-center gap-2 text-cyber-primary font-bold">
           <ShieldAlert className="w-4 h-4" />
           <span>AIMPRO 2.0 ULTIMATE</span>

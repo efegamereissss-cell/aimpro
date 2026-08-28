@@ -15,6 +15,8 @@ export const PlayerController: React.FC = () => {
   const gameStatus = useGameStore(state => state.status);
   const activeScenario = useGameStore(state => state.activeScenario);
   const activeTargets = useGameStore(state => state.activeTargets);
+  const activeWeaponSlot = useGameStore(state => state.activeWeaponSlot);
+  const setWeaponSlot = useGameStore(state => state.setWeaponSlot);
   const registerShot = useGameStore(state => state.registerShot);
   const registerTrackingTick = useGameStore(state => state.registerTrackingTick);
   const addBulletTracer = useGameStore(state => state.addBulletTracer);
@@ -33,6 +35,9 @@ export const PlayerController: React.FC = () => {
 
   const activeTargetsRef = useRef(activeTargets);
   activeTargetsRef.current = activeTargets;
+
+  const activeWeaponSlotRef = useRef(activeWeaponSlot);
+  activeWeaponSlotRef.current = activeWeaponSlot;
 
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -73,13 +78,18 @@ export const PlayerController: React.FC = () => {
     const currentScenario = activeScenarioRef.current;
     const currentSettings = settingsRef.current;
     const targets = activeTargetsRef.current;
+    const currentSlot = activeWeaponSlotRef.current;
 
     const now = Date.now();
-    const intervalMs = 1000 / currentScenario.fireRateRps;
+    const intervalMs = currentSlot === 'knife' ? 350 : 1000 / currentScenario.fireRateRps;
     if (now - lastShotTimeRef.current < intervalMs) return;
     lastShotTimeRef.current = now;
 
-    soundEngine.playGunshot(currentScenario.weaponType);
+    if (currentSlot === 'knife') {
+      soundEngine.playKnifeSlash();
+    } else {
+      soundEngine.playGunshot(currentScenario.weaponType);
+    }
 
     // Cast Ray from center of screen (0, 0)
     raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -120,20 +130,24 @@ export const PlayerController: React.FC = () => {
 
     if (hitTargetId && hitPoint) {
       registerShot(hitTargetId, hitPoint, isHeadshot);
-      addBulletTracer(
-        [muzzleWorld.x, muzzleWorld.y, muzzleWorld.z],
-        hitPoint,
-        currentSettings.video.targetColor
-      );
+      if (currentSlot !== 'knife') {
+        addBulletTracer(
+          [muzzleWorld.x, muzzleWorld.y, muzzleWorld.z],
+          hitPoint,
+          currentSettings.video.targetColor
+        );
+      }
     } else {
-      // Missed shot into distance
-      const missPos = ray.origin.clone().add(ray.direction.clone().multiplyScalar(40));
+      // Missed shot
       registerShot();
-      addBulletTracer(
-        [muzzleWorld.x, muzzleWorld.y, muzzleWorld.z],
-        [missPos.x, missPos.y, missPos.z],
-        '#64748b'
-      );
+      if (currentSlot !== 'knife') {
+        const missPos = ray.origin.clone().add(ray.direction.clone().multiplyScalar(40));
+        addBulletTracer(
+          [muzzleWorld.x, muzzleWorld.y, muzzleWorld.z],
+          [missPos.x, missPos.y, missPos.z],
+          '#64748b'
+        );
+      }
     }
   }, [camera, registerShot, addBulletTracer, scene]);
 
@@ -162,7 +176,6 @@ export const PlayerController: React.FC = () => {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      // ONLY process mouse move if currently playing AND pointer locked!
       if (gameStatusRef.current !== 'playing' || document.pointerLockElement !== gl.domElement) {
         return;
       }
@@ -189,20 +202,15 @@ export const PlayerController: React.FC = () => {
       const radX = calculateMouseRadians(deltaX, sens * adsFactor, preset);
       const radY = calculateMouseRadians(deltaY, sens * adsFactor, preset);
 
-      // Pure scalar accumulation
       yawRef.current -= radX;
       pitchRef.current -= currentSettings.controls.invertY ? -radY : radY;
-
-      // Clamp vertical pitch
       pitchRef.current = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitchRef.current));
 
-      // Apply to camera
       _euler.set(pitchRef.current, yawRef.current, 0, 'YXZ');
       camera.quaternion.setFromEuler(_euler);
     };
 
     const handleMouseDown = (e: MouseEvent) => {
-      // DO NOT request pointer lock if not playing! (Allows clicking menus, tabs, settings freely)
       if (gameStatusRef.current !== 'playing') {
         return;
       }
@@ -237,6 +245,16 @@ export const PlayerController: React.FC = () => {
       if (e.code === 'KeyD') keysRef.current.right = true;
       if (e.code === 'Space') keysRef.current.jump = true;
 
+      // Weapon Switching
+      if (e.code === 'Digit1' || e.code === 'Numpad1' || e.key === '1') {
+        setWeaponSlot('gun');
+        soundEngine.playWeaponInspect();
+      }
+      if (e.code === 'Digit3' || e.code === 'Numpad3' || e.key === '3') {
+        setWeaponSlot('knife');
+        soundEngine.playKarambitSpin();
+      }
+
       if (e.code === 'Escape' || e.code === 'KeyP') {
         pauseGame();
       }
@@ -268,14 +286,13 @@ export const PlayerController: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [camera, gl, requestLock, pauseGame, restartGame]);
+  }, [camera, gl, requestLock, pauseGame, restartGame, setWeaponSlot]);
 
   // Main Simulation Loop
   useFrame((_, delta) => {
     if (gameStatusRef.current === 'playing') {
       tickGame(delta);
 
-      // Kinematic Player Movement
       const keys = keysRef.current;
       const moveDir = new THREE.Vector3();
 
@@ -342,19 +359,21 @@ export const PlayerController: React.FC = () => {
       const currentScenario = activeScenarioRef.current;
       const targets = activeTargetsRef.current;
 
-      if (currentScenario.weaponType === 'beam') {
-        raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
-        const ray = raycaster.current.ray;
-        for (const target of targets) {
-          const center = new THREE.Vector3(...target.position);
-          const sphere = new THREE.Sphere(center, target.radius * 1.1);
-          if (ray.intersectsSphere(sphere)) {
-            registerTrackingTick(target.id, delta);
-            break;
+      if (activeWeaponSlotRef.current !== 'knife') {
+        if (currentScenario.weaponType === 'beam') {
+          raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
+          const ray = raycaster.current.ray;
+          for (const target of targets) {
+            const center = new THREE.Vector3(...target.position);
+            const sphere = new THREE.Sphere(center, target.radius * 1.1);
+            if (ray.intersectsSphere(sphere)) {
+              registerTrackingTick(target.id, delta);
+              break;
+            }
           }
+        } else if (activeScenario.isAutomatic) {
+          handleFireRef.current();
         }
-      } else if (activeScenario.isAutomatic) {
-        handleFireRef.current();
       }
     }
   });

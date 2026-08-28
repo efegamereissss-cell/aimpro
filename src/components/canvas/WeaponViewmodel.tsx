@@ -26,8 +26,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
   const inspectProgressRef = useRef(0);
   const isInspectingRef = useRef(false);
 
-  // Weapon slot: 'gun' | 'rgx_knife'
-  const [activeSlot, setActiveSlot] = useState<'gun' | 'rgx_knife'>('gun');
+  const activeWeaponSlot = useGameStore(state => state.activeWeaponSlot);
   const [rgbColor, setRgbColor] = useState('#00ff66');
 
   // Knife slash animation state
@@ -40,21 +39,13 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 
   const weaponType = scenario.weaponType;
 
-  // Keybindings for weapon slots & inspect
+  // Listen for F key for inspect
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Digit1') {
-        setActiveSlot('gun');
-        soundEngine.playWeaponInspect();
-      } else if (e.code === 'Digit3') {
-        setActiveSlot('rgx_knife');
-        soundEngine.playKarambitSpin();
-      }
-
       if (e.code === 'KeyF' && !isInspectingRef.current) {
         isInspectingRef.current = true;
         inspectProgressRef.current = 0;
-        if (activeSlot === 'rgx_knife') {
+        if (activeWeaponSlot === 'knife') {
           soundEngine.playKarambitSpin();
         } else {
           soundEngine.playWeaponInspect();
@@ -63,19 +54,19 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSlot]);
+  }, [activeWeaponSlot]);
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
 
     const t = state.clock.getElapsedTime();
 
-    // 1. Dynamic RGX 11z Pro RGB Chroma Color Shift (Green -> Cyan -> Magenta -> Yellow)
+    // 1. Dynamic RGX 11z Pro RGB Chroma Color Shift
     const chromaHue = (t * 0.3) % 1.0;
     const chromaRgb = new THREE.Color().setHSL(chromaHue, 1.0, 0.55);
     setRgbColor('#' + chromaRgb.getHexString());
 
-    // 2. Weapon Sway (lag behind mouse rotation)
+    // 2. Weapon Sway
     const swayX = -mouseDelta.x * 0.0006;
     const swayY = -mouseDelta.y * 0.0006;
 
@@ -88,10 +79,9 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     // 4. Recoil & Knife Slash
     if (isFiring) {
       isInspectingRef.current = false;
-      if (activeSlot === 'rgx_knife') {
+      if (activeWeaponSlot === 'knife') {
         isSlashingRef.current = true;
         slashProgressRef.current = 0;
-        soundEngine.playKnifeSlash();
       } else {
         const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'rifle' ? 0.07 : 0.05);
         const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'rifle' ? 0.08 : 0.06);
@@ -122,11 +112,10 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     let karambitSpinAngle = 0;
 
     if (isInspectingRef.current) {
-      const speed = activeSlot === 'rgx_knife' ? 9.0 : 2.2;
+      const speed = activeWeaponSlot === 'knife' ? 9.0 : 2.2;
       inspectProgressRef.current += delta * speed;
 
-      if (activeSlot === 'rgx_knife') {
-        // Fast 360-Degree Karambit Finger Spin
+      if (activeWeaponSlot === 'knife') {
         karambitSpinAngle = inspectProgressRef.current;
         if (inspectProgressRef.current >= Math.PI * 4) {
           isInspectingRef.current = false;
@@ -152,9 +141,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     const gunHipfirePos = new THREE.Vector3(0.24, -0.21, -0.48);
     const gunAdsPos = new THREE.Vector3(0.0, -0.148, -0.38);
     const knifePos = new THREE.Vector3(0.24, -0.22, -0.44 - slashPosZ);
-    const basePos = activeSlot === 'rgx_knife' ? knifePos : (isADS ? gunAdsPos : gunHipfirePos);
+    const basePos = activeWeaponSlot === 'knife' ? knifePos : (isADS ? gunAdsPos : gunHipfirePos);
 
-    // Transform local weapon position into Camera World Space
     const localPos = new THREE.Vector3(
       basePos.x + swayX + bobX,
       basePos.y + swayY + bobY,
@@ -163,17 +151,13 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     const worldPos = localPos.applyMatrix4(camera.matrixWorld);
     groupRef.current.position.copy(worldPos);
 
-    // Apply Camera Rotation + Weapon Sway Tilt
     groupRef.current.quaternion.copy(camera.quaternion);
-
-    // Apply local tilts
     groupRef.current.rotateX(recoilRef.current.pitch + swayY * 0.4 + slashRotX);
     groupRef.current.rotateY(swayX * 0.6 + inspectRotY);
     groupRef.current.rotateZ(swayX * 1.0 + inspectRotZ);
 
-    // Muzzle Flash Light intensity
     if (muzzleFlashRef.current) {
-      muzzleFlashRef.current.intensity = isFiring && activeSlot === 'gun' ? 5.0 : 0;
+      muzzleFlashRef.current.intensity = isFiring && activeWeaponSlot === 'gun' ? 5.0 : 0;
     }
   });
 
@@ -185,7 +169,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         {/* ========================================================================= */}
         {/* WEAPON: VALORANT RGX 11z PRO 3.0 BLADE / KARAMBIT CLAW KNIFE */}
         {/* ========================================================================= */}
-        {activeSlot === 'rgx_knife' && (
+        {activeWeaponSlot === 'knife' && (
           <group position={[0, 0, 0]} rotation={[0.4, 0.5, -0.5]} scale={[1.2, 1.2, 1.2]}>
             <group ref={karambitGroupRef} position={[0.015, 0.21, 0]}>
               <group position={[-0.015, -0.21, 0]}>
@@ -198,7 +182,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         {/* ========================================================================= */}
         {/* PRIMARY WEAPONS (GUN SLOT) */}
         {/* ========================================================================= */}
-        {activeSlot === 'gun' && (
+        {activeWeaponSlot === 'gun' && (
           <group>
             {/* WEAPON TYPE: ASSAULT RIFLE (VANDAL / CARBINE) */}
             {weaponType === 'rifle' && (
