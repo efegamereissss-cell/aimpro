@@ -371,13 +371,58 @@ class ProceduralSoundEngine {
       osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
 
       gain.gain.setValueAtTime(this.masterVolume * 0.25, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } catch {
+      // ignore
+    }
+  }
+
+  public playKillBannerSound(streak: number = 1) {
+    try {
+      this.init();
+      if (!this.ctx || !this.masterGain) return;
+
+      const now = this.ctx.currentTime;
+      const isAce = streak >= 5;
+
+      // Progressive Valorant kill chord notes: C5, E5, G5, B5, C6 (Ace)
+      const frequencies = [523.25, 659.25, 783.99, 987.77, 1046.5];
+      const freq = frequencies[Math.min(streak - 1, 4)];
+
+      // 1. Crystal Harmonic Bell
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = isAce ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      if (isAce) {
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.5, now + 0.15);
+      }
+
+      gain.gain.setValueAtTime(this.masterVolume * (isAce ? 0.7 : 0.45), now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + (isAce ? 0.85 : 0.35));
 
       osc.connect(gain);
       gain.connect(this.masterGain);
-
       osc.start(now);
-      osc.stop(now + 0.1);
+      osc.stop(now + (isAce ? 0.9 : 0.4));
+
+      // 2. Ace Deep Bass Sub Boom
+      if (isAce) {
+        const subOsc = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(110, now);
+        subOsc.frequency.exponentialRampToValueAtTime(38, now + 0.3);
+
+        subGain.gain.setValueAtTime(this.masterVolume * 0.8, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+
+        subOsc.connect(subGain);
+        subGain.connect(this.masterGain);
+        subOsc.start(now);
+        subOsc.stop(now + 0.75);
+      }
     } catch {
       // ignore
     }

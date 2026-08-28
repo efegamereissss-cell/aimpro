@@ -2,6 +2,29 @@ import { ScenarioConfig } from '../../types/game';
 
 export const STRAFING_SCENARIOS: ScenarioConfig[] = [
   {
+    id: 'tactical_bot_duel_peeking',
+    name: 'Taktiksel Bot Düellosu (Valorant / CS2 Peeking Range)',
+    category: 'strafing',
+    description: 'Taktiksel siperlerin arkasından ani A/D counter-strafe ile peek atan, kafa hizasında hareket eden espor botlarına karşı 1-tap kafa vuruşu ve açı temizleme antrenmanı!',
+    difficulty: 'Advanced',
+    duration: 60,
+    targetCount: 2,
+    targetShape: 'capsule',
+    targetRadius: 0.52,
+    targetMaxHealth: 1,
+    movementPattern: 'strafe_random',
+    movementSpeed: 5.4,
+    spawnArea: { xMin: -7.5, xMax: 7.5, yMin: 0.2, yMax: 2.2, zMin: -11, zMax: -8 },
+    respawnDelayMs: 50,
+    scorePerHit: 100,
+    scorePerKill: 500,
+    scorePenaltyMiss: 10,
+    weaponType: 'rifle',
+    fireRateRps: 9.75,
+    isAutomatic: true,
+    tags: ['Taktiksel Düello', 'Bot Peeking', 'Counter-Strafe', 'Valorant 1-Tap', 'Espor']
+  },
+  {
     id: 'cs16_bhop_parkour_cyber',
     name: 'CS 1.6 Bunny Hop Parkour - Cyber Course',
     category: 'strafing',
