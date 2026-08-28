@@ -1,8 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
-import { useSettingsStore } from '../../store/useSettingsStore';
 import { soundEngine } from '../../audio/SoundEngine';
 import { RGXKarambitModel } from './RGXKarambitModel';
 import { ArcaneSheriffModel } from './ArcaneSheriffModel';
@@ -14,6 +13,17 @@ interface WeaponViewmodelProps {
   mouseDelta: { x: number; y: number };
   movementSpeed: number;
 }
+
+// Static Scratch Vector & Euler Pool for Zero-Allocation, 240+ FPS Viewmodel Engine
+const _vandalHipfirePos = new THREE.Vector3(0.23, -0.21, -0.46);
+const _vandalAdsPos = new THREE.Vector3(0.0, -0.152, -0.38);
+const _sheriffHipfirePos = new THREE.Vector3(0.23, -0.21, -0.44);
+const _sheriffAdsPos = new THREE.Vector3(0.0, -0.142, -0.36);
+
+const _tempInspectPos = new THREE.Vector3();
+const _tempBasePos = new THREE.Vector3();
+const _tempLocalPos = new THREE.Vector3();
+const _tempWorldPos = new THREE.Vector3();
 
 export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
   isFiring,
@@ -30,13 +40,11 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
   const isInspectingRef = useRef(false);
 
   const activeWeaponSlot = useGameStore(state => state.activeWeaponSlot);
-  const [rgbColor, setRgbColor] = useState('#00ff66');
 
   // Knife slash animation state
   const slashProgressRef = useRef(0);
   const isSlashingRef = useRef(false);
 
-  const settings = useSettingsStore(state => state.settings);
   const { camera } = useThree();
 
   // Listen for F key for inspect (can re-trigger/loop infinitely)
@@ -61,23 +69,18 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 
     const t = state.clock.getElapsedTime();
 
-    // 1. Dynamic RGX 11z Pro RGB Chroma Color Shift
-    const chromaHue = (t * 0.4) % 1.0;
-    const chromaRgb = new THREE.Color().setHSL(chromaHue, 1.0, 0.55);
-    setRgbColor('#' + chromaRgb.getHexString());
-
-    // 2. Weapon Sway with Smooth Inertia
+    // 1. Weapon Sway with Smooth Inertia
     const swayX = -mouseDelta.x * 0.0006;
     const swayY = -mouseDelta.y * 0.0006;
 
-    // 3. Realistic Weapon Bobbing
+    // 2. Realistic Weapon Bobbing
     const isMoving = movementSpeed > 0.2;
     const bobFreq = isMoving ? 12 : 2.5;
     const bobAmp = isMoving ? 0.012 : 0.0025;
     const bobX = Math.cos(t * bobFreq) * bobAmp;
     const bobY = Math.abs(Math.sin(t * bobFreq)) * bobAmp;
 
-    // 4. Recoil & Knife Slash
+    // 3. Recoil & Knife Slash
     if (isFiring) {
       isInspectingRef.current = false;
       if (activeWeaponSlot === 'knife') {
@@ -107,11 +110,11 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
       }
     }
 
-    // 5. Inspect Animations (Valorant RGX Karambit vs Arcane Sheriff vs Prelude Vandal)
+    // 4. Inspect Animations (Valorant RGX Karambit vs Arcane Sheriff vs Prelude Vandal)
     let inspectRotX = 0;
     let inspectRotY = 0;
     let inspectRotZ = 0;
-    let inspectOffsetPos = new THREE.Vector3(0, 0, 0);
+    _tempInspectPos.set(0, 0, 0);
     let karambitSpinAngle = 0;
     let sheriffSpinAngle = 0;
 
@@ -128,7 +131,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         } else {
           if (p < 0.15) {
             const ease = Math.sin((p / 0.15) * (Math.PI / 2));
-            inspectOffsetPos.set(-0.03 * ease, 0.04 * ease, 0.03 * ease);
+            _tempInspectPos.set(-0.03 * ease, 0.04 * ease, 0.03 * ease);
             inspectRotX = 0.15 * ease;
             inspectRotY = -0.1 * ease;
           } else if (p < 0.82) {
@@ -136,7 +139,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
             const fullSpins = 5.0;
             karambitSpinAngle = spinP * Math.PI * 2 * fullSpins;
 
-            inspectOffsetPos.set(
+            _tempInspectPos.set(
               -0.03 + Math.sin(karambitSpinAngle * 0.5) * 0.015,
               0.04 + Math.cos(karambitSpinAngle * 0.5) * 0.012,
               0.03
@@ -149,7 +152,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
             const easeOut = 1.0 - Math.pow(1.0 - catchP, 3);
             karambitSpinAngle = Math.PI * 2 * 5.0 + Math.sin(catchP * Math.PI) * 0.4;
 
-            inspectOffsetPos.set(
+            _tempInspectPos.set(
               -0.03 * (1.0 - easeOut),
               0.04 * (1.0 - easeOut),
               0.03 * (1.0 - easeOut)
@@ -171,7 +174,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           if (p < 0.45) {
             const spinP = p / 0.45;
             sheriffSpinAngle = spinP * Math.PI * 2;
-            inspectOffsetPos.set(-0.03 * Math.sin(spinP * Math.PI), 0.04 * Math.sin(spinP * Math.PI), 0);
+            _tempInspectPos.set(-0.03 * Math.sin(spinP * Math.PI), 0.04 * Math.sin(spinP * Math.PI), 0);
           } else if (p < 0.8) {
             const tiltP = (p - 0.45) / 0.35;
             inspectRotY = Math.sin(tiltP * Math.PI) * 0.35;
@@ -203,42 +206,42 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
       sheriffSpinRef.current.rotation.x = sheriffSpinAngle;
     }
 
-    // 6. Target Local Position
-    const vandalHipfirePos = new THREE.Vector3(0.23, -0.21, -0.46);
-    const vandalAdsPos = new THREE.Vector3(0.0, -0.152, -0.38);
-    const sheriffHipfirePos = new THREE.Vector3(0.23, -0.21, -0.44);
-    const sheriffAdsPos = new THREE.Vector3(0.0, -0.142, -0.36);
-
-    const knifePos = new THREE.Vector3(
-      0.23 + inspectOffsetPos.x,
-      -0.22 + inspectOffsetPos.y,
-      -0.42 - slashPosZ + inspectOffsetPos.z
-    );
-
-    let activeBasePos = vandalHipfirePos;
+    // 5. Target Local Position with Zero-Allocation Vector Pooling
     if (activeWeaponSlot === 'knife') {
-      activeBasePos = knifePos;
+      _tempBasePos.set(
+        0.23 + _tempInspectPos.x,
+        -0.22 + _tempInspectPos.y,
+        -0.42 - slashPosZ + _tempInspectPos.z
+      );
     } else if (activeWeaponSlot === 'sheriff') {
-      activeBasePos = isADS ? sheriffAdsPos : new THREE.Vector3(
-        sheriffHipfirePos.x + inspectOffsetPos.x,
-        sheriffHipfirePos.y + inspectOffsetPos.y,
-        sheriffHipfirePos.z + inspectOffsetPos.z
-      );
+      if (isADS) {
+        _tempBasePos.copy(_sheriffAdsPos);
+      } else {
+        _tempBasePos.set(
+          _sheriffHipfirePos.x + _tempInspectPos.x,
+          _sheriffHipfirePos.y + _tempInspectPos.y,
+          _sheriffHipfirePos.z + _tempInspectPos.z
+        );
+      }
     } else {
-      activeBasePos = isADS ? vandalAdsPos : new THREE.Vector3(
-        vandalHipfirePos.x + inspectOffsetPos.x,
-        vandalHipfirePos.y + inspectOffsetPos.y,
-        vandalHipfirePos.z + inspectOffsetPos.z
-      );
+      if (isADS) {
+        _tempBasePos.copy(_vandalAdsPos);
+      } else {
+        _tempBasePos.set(
+          _vandalHipfirePos.x + _tempInspectPos.x,
+          _vandalHipfirePos.y + _tempInspectPos.y,
+          _vandalHipfirePos.z + _tempInspectPos.z
+        );
+      }
     }
 
-    const localPos = new THREE.Vector3(
-      activeBasePos.x + swayX + bobX,
-      activeBasePos.y + swayY + bobY,
-      activeBasePos.z + recoilRef.current.z
+    _tempLocalPos.set(
+      _tempBasePos.x + swayX + bobX,
+      _tempBasePos.y + swayY + bobY,
+      _tempBasePos.z + recoilRef.current.z
     );
-    const worldPos = localPos.applyMatrix4(camera.matrixWorld);
-    groupRef.current.position.copy(worldPos);
+    _tempWorldPos.copy(_tempLocalPos).applyMatrix4(camera.matrixWorld);
+    groupRef.current.position.copy(_tempWorldPos);
 
     groupRef.current.quaternion.copy(camera.quaternion);
     groupRef.current.rotateX(recoilRef.current.pitch + swayY * 0.4 + slashRotX + inspectRotX);
@@ -246,7 +249,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     groupRef.current.rotateZ(swayX * 1.0 + inspectRotZ);
 
     if (muzzleFlashRef.current) {
-      muzzleFlashRef.current.intensity = isFiring && activeWeaponSlot !== 'knife' ? 5.0 : 0;
+      muzzleFlashRef.current.intensity = isFiring && activeWeaponSlot !== 'knife' ? 4.0 : 0;
     }
   });
 
@@ -264,7 +267,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         >
           <group ref={karambitSpinRef} position={[0.0, 0.08, 0]}>
             <group position={[0.0, -0.08, 0]}>
-              <RGXKarambitModel rgbColor={rgbColor} />
+              <RGXKarambitModel visible={activeWeaponSlot === 'knife'} />
             </group>
           </group>
         </group>
@@ -300,7 +303,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           ref={muzzleFlashRef}
           position={[0, 0.035, 0.52]}
           color="#00f0ff"
-          distance={8}
+          distance={6}
           intensity={0}
         />
       </group>

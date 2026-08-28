@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 interface RGXKarambitModelProps {
-  rgbColor: string;
+  visible?: boolean;
 }
 
 // Global Singleton Cache for Instant 0ms Weapon Switching (No Lag, No Freezing)
@@ -49,8 +50,8 @@ function preloadRGXModel() {
       fbx.traverse(child => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
+          mesh.castShadow = false; // Viewmodel does not need shadow caster pass
+          mesh.receiveShadow = false;
 
           const pbrMat = new THREE.MeshStandardMaterial({
             map: baseColorMap,
@@ -89,8 +90,12 @@ if (typeof window !== 'undefined') {
   preloadRGXModel();
 }
 
-export const RGXKarambitModel: React.FC<RGXKarambitModelProps> = ({ rgbColor }) => {
+const _tempColor = new THREE.Color();
+
+export const RGXKarambitModel: React.FC<RGXKarambitModelProps> = ({ visible = true }) => {
   const [model, setModel] = useState<THREE.Group | null>(() => (cachedFbxModel ? cachedFbxModel.clone() : null));
+  const lightRef1 = useRef<THREE.PointLight>(null);
+  const lightRef2 = useRef<THREE.PointLight>(null);
 
   useEffect(() => {
     if (cachedFbxModel) {
@@ -103,24 +108,32 @@ export const RGXKarambitModel: React.FC<RGXKarambitModelProps> = ({ rgbColor }) 
     }
   }, []);
 
-  useEffect(() => {
-    cachedMaterials.forEach(mat => {
-      mat.emissive.set(rgbColor);
-    });
-  }, [rgbColor]);
+  // Zero-allocation, zero-re-render high-performance Chroma shifting in Three.js render loop
+  useFrame(state => {
+    if (!visible) return;
+    const t = state.clock.getElapsedTime();
+    const hue = (t * 0.45) % 1.0;
+    _tempColor.setHSL(hue, 1.0, 0.52);
+
+    for (let i = 0; i < cachedMaterials.length; i++) {
+      cachedMaterials[i].emissive.copy(_tempColor);
+    }
+
+    if (lightRef1.current) {
+      lightRef1.current.color.copy(_tempColor);
+    }
+    if (lightRef2.current) {
+      lightRef2.current.color.copy(_tempColor);
+    }
+  });
 
   return (
     <group position={[0, 0, 0]}>
-      {model && (
-        <primitive
-          object={model}
-          rotation={[0, 0, 0]}
-        />
-      )}
+      {model && <primitive object={model} rotation={[0, 0, 0]} />}
 
       {/* Dynamic RGB Point Lights */}
-      <pointLight position={[0.04, 0.12, 0.04]} color={rgbColor} intensity={3.8} distance={5} />
-      <pointLight position={[-0.02, -0.06, 0]} color={rgbColor} intensity={2.2} distance={4} />
+      <pointLight ref={lightRef1} position={[0.04, 0.12, 0.04]} intensity={2.8} distance={3} />
+      <pointLight ref={lightRef2} position={[-0.02, -0.06, 0]} intensity={1.8} distance={2.5} />
     </group>
   );
 };
