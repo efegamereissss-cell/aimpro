@@ -362,6 +362,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (isKill) {
       nextTargets.splice(targetIndex, 1);
       nextDestroyed += 1;
+
+      // Instant 0ms Target Respawn
+      const sp = scenario.spawnArea;
+      const spawnPos: [number, number, number] = [
+        randomRange(sp.xMin, sp.xMax),
+        randomRange(sp.yMin, sp.yMax),
+        randomRange(sp.zMin, sp.zMax)
+      ];
+      const speed = scenario.movementSpeed;
+      const angle = randomRange(0, Math.PI * 2);
+
+      nextTargets.push({
+        id: 'target_' + Math.random().toString(36).substring(2, 9),
+        position: [...spawnPos],
+        velocity: [Math.cos(angle) * speed, Math.sin(angle) * speed, 0],
+        radius: scenario.targetRadius,
+        shape: scenario.targetShape,
+        maxHealth: scenario.targetMaxHealth,
+        currentHealth: scenario.targetMaxHealth,
+        createdAt: now,
+        spawnPosition: [...spawnPos],
+        movementPattern: scenario.movementPattern,
+        movementPhase: randomRange(0, Math.PI * 2)
+      });
     } else {
       nextTargets[targetIndex] = {
         ...target,

@@ -115,7 +115,14 @@ export const PlayerController: React.FC = () => {
     const currentSettings = settingsRef.current;
 
     const now = Date.now();
-    const intervalMs = currentSlot === 'knife' ? 350 : 1000 / currentScenario.fireRateRps;
+    // Enforce authentic fire rate intervals (Pistol/Sheriff: 280ms per shot, Knife: 350ms, Rifle: based on RPS)
+    const intervalMs =
+      currentSlot === 'knife'
+        ? 350
+        : currentSlot === 'sheriff'
+        ? 280
+        : 1000 / (currentScenario.fireRateRps || 9.75);
+
     if (now - lastShotTimeRef.current < intervalMs) return;
     lastShotTimeRef.current = now;
 
@@ -254,7 +261,7 @@ export const PlayerController: React.FC = () => {
 
       if (e.button === 0) {
         isMouseDownRef.current = true;
-        handleFireRef.current();
+        handleFireRef.current(); // Single shot on click
       } else if (e.button === 2) {
         isADSDownRef.current = true;
       }
@@ -273,7 +280,7 @@ export const PlayerController: React.FC = () => {
         keysRef.current.jump = true;
         setTimeout(() => {
           keysRef.current.jump = false;
-        }, 120);
+        }, 100);
       }
     };
 
@@ -346,7 +353,8 @@ export const PlayerController: React.FC = () => {
 
     const dt = Math.min(delta, 0.05);
 
-    // Continuous Beam / Rapid Auto Fire
+    // Continuous Beam / Automatic Rifle Auto-Fire
+    // Semi-automatic Pistol (Sheriff) and Knife NEVER spray on hold!
     if (isMouseDownRef.current) {
       if (scenarioRef.current.weaponType === 'beam') {
         raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -358,7 +366,11 @@ export const PlayerController: React.FC = () => {
             break;
           }
         }
-      } else if (scenarioRef.current.fireRateRps > 5 && activeWeaponSlotRef.current !== 'knife') {
+      } else if (
+        scenarioRef.current.isAutomatic &&
+        activeWeaponSlotRef.current === 'vandal' &&
+        scenarioRef.current.fireRateRps > 3
+      ) {
         handleFireRef.current();
       }
     }
@@ -378,58 +390,45 @@ export const PlayerController: React.FC = () => {
       wishDir.normalize();
     }
 
-    // CS 1.6 Movement Physics & Acceleration
-    if (isBhopScenario) {
-      const GRAVITY = 18.0;
-      const JUMP_IMPULSE = 6.2;
-      const GROUND_FRICTION = 5.0;
-      const MAX_GROUND_SPEED = 7.0;
+    // Universal Jump & Movement Physics Engine
+    const GRAVITY = 18.0;
+    const JUMP_IMPULSE = isBhopScenario ? 6.2 : 5.4;
+    const GROUND_FRICTION = isBhopScenario ? 5.0 : 9.0;
+    const MAX_GROUND_SPEED = isBhopScenario ? 7.0 : 5.8;
 
-      if (isGroundedRef.current) {
-        if (keysRef.current.jump) {
-          velRef.current.y = JUMP_IMPULSE;
-          isGroundedRef.current = false;
-          soundEngine.playBhopJump();
-        } else {
-          // Ground friction deceleration
-          const currentSpeed = new THREE.Vector2(velRef.current.x, velRef.current.z).length();
-          if (currentSpeed > 0) {
-            const drop = currentSpeed * GROUND_FRICTION * dt;
-            const newSpeed = Math.max(0, currentSpeed - drop);
-            velRef.current.x = (velRef.current.x / currentSpeed) * newSpeed;
-            velRef.current.z = (velRef.current.z / currentSpeed) * newSpeed;
-          }
-
-          // Ground acceleration
-          if (hasInput) {
-            const targetVel = wishDir.clone().multiplyScalar(MAX_GROUND_SPEED);
-            velRef.current.x = THREE.MathUtils.lerp(velRef.current.x, targetVel.x, dt * 10);
-            velRef.current.z = THREE.MathUtils.lerp(velRef.current.z, targetVel.z, dt * 10);
-          }
-        }
+    if (isGroundedRef.current) {
+      if (keysRef.current.jump) {
+        velRef.current.y = JUMP_IMPULSE;
+        isGroundedRef.current = false;
+        soundEngine.playBhopJump();
       } else {
-        // Authentic CS 1.6 / Source Air Acceleration
-        calculateAirAcceleration(velRef.current, wishDir, dt);
+        // Ground friction deceleration
+        const currentSpeed = Math.sqrt(velRef.current.x ** 2 + velRef.current.z ** 2);
+        if (currentSpeed > 0) {
+          const drop = currentSpeed * GROUND_FRICTION * dt;
+          const newSpeed = Math.max(0, currentSpeed - drop);
+          velRef.current.x = (velRef.current.x / currentSpeed) * newSpeed;
+          velRef.current.z = (velRef.current.z / currentSpeed) * newSpeed;
+        }
 
-        // Apply Gravity
-        velRef.current.y -= GRAVITY * dt;
+        // Ground acceleration
+        if (hasInput) {
+          const targetVel = wishDir.clone().multiplyScalar(MAX_GROUND_SPEED);
+          velRef.current.x = THREE.MathUtils.lerp(velRef.current.x, targetVel.x, dt * 12);
+          velRef.current.z = THREE.MathUtils.lerp(velRef.current.z, targetVel.z, dt * 12);
+        }
       }
     } else {
-      // Standard Aim Arena Movement (Walk)
-      const walkSpeed = 5.5;
-      if (hasInput) {
-        const targetVel = wishDir.clone().multiplyScalar(walkSpeed);
-        velRef.current.x = THREE.MathUtils.lerp(velRef.current.x, targetVel.x, dt * 12);
-        velRef.current.z = THREE.MathUtils.lerp(velRef.current.z, targetVel.z, dt * 12);
-      } else {
-        velRef.current.x = THREE.MathUtils.lerp(velRef.current.x, 0, dt * 12);
-        velRef.current.z = THREE.MathUtils.lerp(velRef.current.z, 0, dt * 12);
-      }
+      // In-Air Movement (Air-acceleration & Strafe physics)
+      calculateAirAcceleration(velRef.current, wishDir, dt);
+
+      // Apply Gravity
+      velRef.current.y -= GRAVITY * dt;
     }
 
     rawMouseDeltaX.current = 0;
 
-    // Continuous Swept Collision Detection with Parkour Blocks
+    // Continuous Swept Collision Detection with Parkour Blocks / Arena Floor
     const nextX = posRef.current.x + velRef.current.x * dt;
     const nextY = posRef.current.y + velRef.current.y * dt;
     const nextZ = posRef.current.z + velRef.current.z * dt;
