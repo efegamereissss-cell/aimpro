@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * CS 1.6 / Source Engine Progressive Bunnyhop & Strafe-Acceleration Physics
- * Starts at standard 250 UPS walk speed and progressively accelerates smoothly
- * (+40-60 UPS per clean strafe hop) up to 800+ UPS as you chain bhops.
+ * CS 1.6 / Source Engine Progressive Bunnyhop & Compounding Strafe-Acceleration Physics
+ * Starts at standard 250 UPS base walk speed and aggressively accelerates with each
+ * consecutive hop (+60 to +100 UPS per clean strafe jump) reaching 1000+ UPS hypersonic speeds!
  */
 
 export interface MovementConfig {
@@ -12,18 +12,18 @@ export interface MovementConfig {
   groundFriction: number;      // Ground friction on floor contact
   groundMaxSpeed: number;      // Standard 250 UPS base walk speed (6.25 m/s)
   groundAccel: number;         // Ground acceleration rate
-  airAccelerate: number;       // Smooth progressive air-strafe acceleration
-  maxAirWishSpeed: number;     // 30 UPS Source air projection speed cap
+  airAccelerate: number;       // Progressive air-strafe acceleration
+  maxAirWishSpeed: number;     // Air projection speed cap
 }
 
 export const CS_16_CONFIG: MovementConfig = {
   gravity: 19.5,
-  jumpImpulse: 6.2,
+  jumpImpulse: 6.4,
   groundFriction: 14.0,
   groundMaxSpeed: 6.25,        // Exactly 250 UPS base speed
-  groundAccel: 45.0,
-  airAccelerate: 85.0,         // Smooth progressive acceleration (+45 UPS per clean strafe)
-  maxAirWishSpeed: 1.65        // Authentic 30 units/s air cap
+  groundAccel: 48.0,
+  airAccelerate: 220.0,        // Rapid progressive acceleration per clean strafe
+  maxAirWishSpeed: 30.0        // Allows stacking high horizontal velocity
 };
 
 export function calculateAirAcceleration(
@@ -34,7 +34,7 @@ export function calculateAirAcceleration(
 ): THREE.Vector3 {
   const wishSpeed = config.maxAirWishSpeed;
   
-  // Project velocity onto wish direction
+  // Project horizontal velocity onto wish direction
   const currentSpeed = velocity.x * wishDir.x + velocity.z * wishDir.z;
   const addSpeed = wishSpeed - currentSpeed;
 
@@ -42,8 +42,12 @@ export function calculateAirAcceleration(
     return velocity;
   }
 
-  // Smooth, progressive GoldSrc / Source air acceleration
-  const accelSpeed = Math.min(addSpeed, config.airAccelerate * wishSpeed * delta);
+  // Compounding Source/GoldSrc air acceleration
+  const currentHorizSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+  // Give a dynamic speed multiplier as player chains bhops
+  const speedBonusMultiplier = 1.0 + Math.min(currentHorizSpeed / 8.0, 2.5);
+
+  const accelSpeed = Math.min(addSpeed, config.airAccelerate * delta * speedBonusMultiplier);
 
   velocity.x += wishDir.x * accelSpeed;
   velocity.z += wishDir.z * accelSpeed;

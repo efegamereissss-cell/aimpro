@@ -62,17 +62,18 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     const t = state.clock.getElapsedTime();
 
     // 1. Dynamic RGX 11z Pro RGB Chroma Color Shift
-    const chromaHue = (t * 0.3) % 1.0;
+    const chromaHue = (t * 0.35) % 1.0;
     const chromaRgb = new THREE.Color().setHSL(chromaHue, 1.0, 0.55);
     setRgbColor('#' + chromaRgb.getHexString());
 
-    // 2. Weapon Sway
+    // 2. Weapon Sway with Smooth Inertia
     const swayX = -mouseDelta.x * 0.0006;
     const swayY = -mouseDelta.y * 0.0006;
 
-    // 3. Weapon Bobbing
-    const bobFreq = movementSpeed > 0.1 ? 12 : 3;
-    const bobAmp = movementSpeed > 0.1 ? 0.015 : 0.003;
+    // 3. Realistic Weapon Bobbing
+    const isMoving = movementSpeed > 0.2;
+    const bobFreq = isMoving ? 12 : 2.5;
+    const bobAmp = isMoving ? 0.012 : 0.0025;
     const bobX = Math.cos(t * bobFreq) * bobAmp;
     const bobY = Math.abs(Math.sin(t * bobFreq)) * bobAmp;
 
@@ -101,8 +102,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         isSlashingRef.current = false;
         slashProgressRef.current = 0;
       } else {
-        slashRotX = Math.sin(slashProgressRef.current) * 1.5;
-        slashPosZ = Math.sin(slashProgressRef.current) * 0.22;
+        slashRotX = Math.sin(slashProgressRef.current) * 1.4;
+        slashPosZ = Math.sin(slashProgressRef.current) * 0.2;
       }
     }
 
@@ -112,7 +113,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     let karambitSpinAngle = 0;
 
     if (isInspectingRef.current) {
-      const speed = activeWeaponSlot === 'knife' ? 9.0 : 2.2;
+      const speed = activeWeaponSlot === 'knife' ? 9.5 : 2.2;
       inspectProgressRef.current += delta * speed;
 
       if (activeWeaponSlot === 'knife') {
@@ -140,7 +141,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     // 6. Target Local Position
     const gunHipfirePos = new THREE.Vector3(0.24, -0.21, -0.48);
     const gunAdsPos = new THREE.Vector3(0.0, -0.148, -0.38);
-    const knifePos = new THREE.Vector3(0.23, -0.23, -0.45 - slashPosZ);
+    // Calibrated authentic Valorant first-person knife placement
+    const knifePos = new THREE.Vector3(0.23, -0.22, -0.42 - slashPosZ);
     const basePos = activeWeaponSlot === 'knife' ? knifePos : (isADS ? gunAdsPos : gunHipfirePos);
 
     const localPos = new THREE.Vector3(
@@ -168,15 +170,16 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
       <group rotation={[0, Math.PI, 0]}>
         {/* ========================================================================= */}
         {/* WEAPON: VALORANT RGX 11z PRO 3.0 BLADE / KARAMBIT CLAW KNIFE */}
+        {/* Calibrated Valorant Reverse-Grip Downward Inward Stance */}
         {/* ========================================================================= */}
         <group
           visible={activeWeaponSlot === 'knife'}
           position={[0, 0, 0]}
-          rotation={[0.3, 0.45, -0.4]}
-          scale={[1.1, 1.1, 1.1]}
+          rotation={[0.16, 0.38, -0.32]}
+          scale={[1.0, 1.0, 1.0]}
         >
-          <group ref={karambitSpinRef} position={[0.0, 0.12, 0]}>
-            <group position={[0.0, -0.12, 0]}>
+          <group ref={karambitSpinRef} position={[0.0, 0.08, 0]}>
+            <group position={[0.0, -0.08, 0]}>
               <RGXKarambitModel rgbColor={rgbColor} />
             </group>
           </group>

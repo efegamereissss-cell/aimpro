@@ -31,11 +31,11 @@ function preloadRGXModel() {
   fbxLoader.load(
     '/models/rgx_karambit/source/hub.fbx',
     fbx => {
-      // 1. Auto-scale to exact FPS knife dimensions (32cm)
+      // 1. Auto-scale to exact FPS knife dimensions (26cm realistic karambit size)
       const initialBox = new THREE.Box3().setFromObject(fbx);
       const size = initialBox.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
-      const targetDim = 0.32;
+      const targetDim = 0.26;
       const scaleFactor = targetDim / (maxDim > 0 ? maxDim : 1);
       fbx.scale.setScalar(scaleFactor);
 
@@ -56,11 +56,11 @@ function preloadRGXModel() {
             map: baseColorMap,
             emissiveMap: emissiveMap,
             emissive: new THREE.Color('#00ff66'),
-            emissiveIntensity: 2.5,
+            emissiveIntensity: 2.8,
             metalnessMap: metalnessMap,
-            metalness: 0.85,
+            metalness: 0.88,
             roughnessMap: roughnessMap,
-            roughness: 0.25,
+            roughness: 0.22,
             normalMap: normalMap,
             alphaMap: opacityMap,
             transparent: true,
@@ -85,7 +85,6 @@ function preloadRGXModel() {
   );
 }
 
-// Start preloading in the background immediately
 if (typeof window !== 'undefined') {
   preloadRGXModel();
 }
@@ -104,7 +103,6 @@ export const RGXKarambitModel: React.FC<RGXKarambitModelProps> = ({ rgbColor }) 
     }
   }, []);
 
-  // Update dynamic RGB Chroma Glow on materials in real-time
   useEffect(() => {
     cachedMaterials.forEach(mat => {
       mat.emissive.set(rgbColor);
@@ -121,8 +119,8 @@ export const RGXKarambitModel: React.FC<RGXKarambitModelProps> = ({ rgbColor }) 
       )}
 
       {/* Dynamic RGB Point Lights */}
-      <pointLight position={[0.04, 0.12, 0.04]} color={rgbColor} intensity={3.5} distance={5} />
-      <pointLight position={[-0.02, -0.06, 0]} color={rgbColor} intensity={2.0} distance={4} />
+      <pointLight position={[0.04, 0.12, 0.04]} color={rgbColor} intensity={3.8} distance={5} />
+      <pointLight position={[-0.02, -0.06, 0]} color={rgbColor} intensity={2.2} distance={4} />
     </group>
   );
 };
