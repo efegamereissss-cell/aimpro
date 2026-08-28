@@ -8,15 +8,23 @@ export const ParticleSystem: React.FC = () => {
 
   return (
     <group>
-      {/* Exploding Shatter Particles */}
+      {/* 3D Exploding Shatter Particles */}
       {particles.map(p => (
         <mesh key={p.id} position={p.position}>
           <boxGeometry args={[p.size, p.size, p.size]} />
-          <meshBasicMaterial color={p.color} transparent opacity={p.life} />
+          <meshStandardMaterial
+            color={p.color}
+            emissive={p.color}
+            emissiveIntensity={0.8}
+            transparent
+            opacity={p.life}
+            roughness={0.2}
+            metalness={0.8}
+          />
         </mesh>
       ))}
 
-      {/* High Velocity Bullet Tracers */}
+      {/* High-Velocity Glow Tracers */}
       {tracers.map(tracer => {
         const from = new THREE.Vector3(...tracer.from);
         const to = new THREE.Vector3(...tracer.to);
@@ -30,8 +38,8 @@ export const ParticleSystem: React.FC = () => {
 
         return (
           <mesh key={tracer.id} position={mid} quaternion={quat}>
-            <cylinderGeometry args={[0.018, 0.018, len, 6]} />
-            <meshBasicMaterial color={tracer.color} transparent opacity={0.85} />
+            <cylinderGeometry args={[0.022, 0.022, len, 8]} />
+            <meshBasicMaterial color={tracer.color} transparent opacity={0.9} />
           </mesh>
         );
       })}

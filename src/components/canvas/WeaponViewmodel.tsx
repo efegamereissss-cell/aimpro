@@ -1,7 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
+import { useSettingsStore } from '../../store/useSettingsStore';
+import { soundEngine } from '../../audio/SoundEngine';
 
 interface WeaponViewmodelProps {
   isFiring: boolean;
@@ -19,10 +21,27 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
   const groupRef = useRef<THREE.Group>(null);
   const muzzleFlashRef = useRef<THREE.PointLight>(null);
   const recoilRef = useRef({ z: 0, pitch: 0 });
+  const inspectProgressRef = useRef(0);
+  const isInspectingRef = useRef(false);
+
   const scenario = useGameStore(state => state.activeScenario);
+  const settings = useSettingsStore(state => state.settings);
   const { camera } = useThree();
 
-  const isBeam = scenario.weaponType === 'beam';
+  const weaponType = scenario.weaponType;
+
+  // Listen for F key to inspect weapon
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'KeyF' && !isInspectingRef.current) {
+        isInspectingRef.current = true;
+        inspectProgressRef.current = 0;
+        soundEngine.playWeaponInspect();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useFrame((state, delta) => {
     if (!groupRef.current) return;
@@ -40,15 +59,33 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 
     // 3. Recoil Kickback
     if (isFiring) {
-      recoilRef.current.z = Math.min(recoilRef.current.z + 0.05, 0.1);
-      recoilRef.current.pitch = Math.min(recoilRef.current.pitch + 0.06, 0.12);
+      isInspectingRef.current = false;
+      const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'rifle' ? 0.07 : 0.05);
+      const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'rifle' ? 0.08 : 0.06);
+      recoilRef.current.z = Math.min(recoilRef.current.z + kickZ, 0.16);
+      recoilRef.current.pitch = Math.min(recoilRef.current.pitch + kickPitch, 0.18);
     }
-    recoilRef.current.z = THREE.MathUtils.lerp(recoilRef.current.z, 0, delta * 15);
-    recoilRef.current.pitch = THREE.MathUtils.lerp(recoilRef.current.pitch, 0, delta * 15);
+    recoilRef.current.z = THREE.MathUtils.lerp(recoilRef.current.z, 0, delta * 16);
+    recoilRef.current.pitch = THREE.MathUtils.lerp(recoilRef.current.pitch, 0, delta * 16);
 
-    // 4. Target Local Position (Hipfire vs ADS)
-    const hipfirePos = new THREE.Vector3(0.26, -0.22, -0.52);
-    const adsPos = new THREE.Vector3(0.0, -0.155, -0.4);
+    // 4. Weapon Inspect Animation (F Key)
+    let inspectRotZ = 0;
+    let inspectRotY = 0;
+    if (isInspectingRef.current) {
+      inspectProgressRef.current += delta * 2.2;
+      if (inspectProgressRef.current >= Math.PI * 2) {
+        isInspectingRef.current = false;
+        inspectProgressRef.current = 0;
+      } else {
+        const p = inspectProgressRef.current;
+        inspectRotZ = Math.sin(p) * 0.6;
+        inspectRotY = Math.sin(p * 0.5) * 0.5;
+      }
+    }
+
+    // 5. Target Local Position (Hipfire vs ADS)
+    const hipfirePos = new THREE.Vector3(0.24, -0.21, -0.48);
+    const adsPos = new THREE.Vector3(0.0, -0.148, -0.38);
     const basePos = isADS ? adsPos : hipfirePos;
 
     // Transform local weapon position into Camera World Space
@@ -63,79 +100,200 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     // Apply Camera Rotation + Weapon Sway Tilt
     groupRef.current.quaternion.copy(camera.quaternion);
 
-    // Apply local rotation tilts (recoil pitch & sway roll)
+    // Apply local tilts
     groupRef.current.rotateX(recoilRef.current.pitch + swayY * 0.4);
-    groupRef.current.rotateY(swayX * 0.6);
-    groupRef.current.rotateZ(swayX * 1.0);
+    groupRef.current.rotateY(swayX * 0.6 + inspectRotY);
+    groupRef.current.rotateZ(swayX * 1.0 + inspectRotZ);
 
     // Muzzle Flash Light intensity
     if (muzzleFlashRef.current) {
-      muzzleFlashRef.current.intensity = isFiring ? 4.5 : 0;
+      muzzleFlashRef.current.intensity = isFiring ? 5.0 : 0;
     }
   });
 
+  const neonAccent = settings.video.targetColor || '#00f0ff';
+
   return (
     <group ref={groupRef}>
-      {/* High-Tech Tactical Blaster Weapon Model */}
+      {/* 180 Rotation for First-Person Orientation */}
       <group rotation={[0, Math.PI, 0]}>
-        {/* Main Body Chassis */}
-        <mesh position={[0, 0, 0]} castShadow>
-          <boxGeometry args={[0.07, 0.09, 0.32]} />
-          <meshStandardMaterial color="#111827" roughness={0.3} metalness={0.85} />
-        </mesh>
+        {/* WEAPON TYPE: ASSAULT RIFLE (VANDAL / CARBINE) */}
+        {weaponType === 'rifle' && (
+          <group>
+            {/* Main Rifle Receiver */}
+            <mesh position={[0, 0, 0]} castShadow>
+              <boxGeometry args={[0.065, 0.085, 0.42]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.25} metalness={0.88} />
+            </mesh>
+            {/* Upper Rail */}
+            <mesh position={[0, 0.052, 0.03]}>
+              <boxGeometry args={[0.05, 0.02, 0.44]} />
+              <meshStandardMaterial color="#1e293b" roughness={0.2} metalness={0.92} />
+            </mesh>
+            {/* Long Fluted Barrel */}
+            <mesh position={[0, 0.035, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.018, 0.018, 0.24, 16]} />
+              <meshStandardMaterial color="#334155" roughness={0.15} metalness={0.95} />
+            </mesh>
+            {/* Tactical Muzzle Brake */}
+            <mesh position={[0, 0.035, 0.45]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.024, 0.02, 0.06, 8]} />
+              <meshStandardMaterial color="#020617" roughness={0.3} metalness={0.9} />
+            </mesh>
+            {/* Curved Banana Magazine */}
+            <mesh position={[0, -0.09, 0.06]} rotation={[0.25, 0, 0]}>
+              <boxGeometry args={[0.045, 0.16, 0.08]} />
+              <meshStandardMaterial color="#020617" roughness={0.4} metalness={0.8} />
+            </mesh>
+            {/* Ergonomic Pistol Grip */}
+            <mesh position={[0, -0.09, -0.1]} rotation={[-0.32, 0, 0]}>
+              <boxGeometry args={[0.048, 0.14, 0.065]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.8} metalness={0.2} />
+            </mesh>
+            {/* Tactical Stock */}
+            <mesh position={[0, -0.01, -0.28]}>
+              <boxGeometry args={[0.05, 0.08, 0.18]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.6} metalness={0.3} />
+            </mesh>
+            {/* Holographic Red Dot Sight Frame */}
+            <mesh position={[0, 0.082, 0.04]}>
+              <boxGeometry args={[0.04, 0.038, 0.06]} />
+              <meshStandardMaterial color="#020617" roughness={0.3} metalness={0.9} />
+            </mesh>
+            {/* Glowing Holographic Glass Reticle */}
+            <mesh position={[0, 0.088, 0.04]}>
+              <planeGeometry args={[0.028, 0.028]} />
+              <meshBasicMaterial color={neonAccent} transparent opacity={0.7} side={THREE.DoubleSide} />
+            </mesh>
+            {/* Neon Accent Energy Strip */}
+            <mesh position={[0, 0.005, 0.02]}>
+              <boxGeometry args={[0.068, 0.015, 0.28]} />
+              <meshBasicMaterial color={neonAccent} />
+            </mesh>
+          </group>
+        )}
 
-        {/* Top Rail / Slide */}
-        <mesh position={[0, 0.055, 0.02]}>
-          <boxGeometry args={[0.06, 0.03, 0.34]} />
-          <meshStandardMaterial color="#1f293d" roughness={0.2} metalness={0.9} />
-        </mesh>
+        {/* WEAPON TYPE: TACTICAL PISTOL (PHANTOM BLASTER) */}
+        {weaponType === 'pistol' && (
+          <group>
+            {/* Slide */}
+            <mesh position={[0, 0.035, 0.02]} castShadow>
+              <boxGeometry args={[0.058, 0.05, 0.26]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.2} metalness={0.9} />
+            </mesh>
+            {/* Lower Frame */}
+            <mesh position={[0, -0.005, -0.01]}>
+              <boxGeometry args={[0.054, 0.04, 0.22]} />
+              <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.7} />
+            </mesh>
+            {/* Barrel */}
+            <mesh position={[0, 0.035, 0.16]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.016, 0.016, 0.08, 16]} />
+              <meshStandardMaterial color="#334155" roughness={0.2} metalness={0.95} />
+            </mesh>
+            {/* Grip */}
+            <mesh position={[0, -0.08, -0.06]} rotation={[-0.28, 0, 0]}>
+              <boxGeometry args={[0.05, 0.13, 0.06]} />
+              <meshStandardMaterial color="#020617" roughness={0.8} metalness={0.2} />
+            </mesh>
+            {/* Glowing Sight Nodes */}
+            <mesh position={[0, 0.065, -0.08]}>
+              <boxGeometry args={[0.02, 0.012, 0.015]} />
+              <meshBasicMaterial color={neonAccent} />
+            </mesh>
+            <mesh position={[0, 0.065, 0.13]}>
+              <boxGeometry args={[0.008, 0.012, 0.012]} />
+              <meshBasicMaterial color={neonAccent} />
+            </mesh>
+            {/* Side Glow Line */}
+            <mesh position={[0, 0.02, 0.02]}>
+              <boxGeometry args={[0.061, 0.008, 0.18]} />
+              <meshBasicMaterial color={neonAccent} />
+            </mesh>
+          </group>
+        )}
 
-        {/* Barrel Assembly */}
-        <mesh position={[0, 0.04, 0.22]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.02, 0.02, 0.12, 16]} />
-          <meshStandardMaterial color="#374151" roughness={0.2} metalness={0.95} />
-        </mesh>
+        {/* WEAPON TYPE: CONTINUOUS BEAM LASER */}
+        {weaponType === 'beam' && (
+          <group>
+            {/* Main Cyber SMG Frame */}
+            <mesh position={[0, 0, 0]} castShadow>
+              <boxGeometry args={[0.07, 0.09, 0.34]} />
+              <meshStandardMaterial color="#0b0f19" roughness={0.3} metalness={0.85} />
+            </mesh>
+            {/* Core Laser Emitter Cylinder */}
+            <mesh position={[0, 0.02, 0.22]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.028, 0.028, 0.14, 16]} />
+              <meshStandardMaterial color="#1e293b" roughness={0.2} metalness={0.95} />
+            </mesh>
+            {/* Core Cooling Coils */}
+            <mesh position={[0, 0.02, 0.0]}>
+              <boxGeometry args={[0.075, 0.06, 0.22]} />
+              <meshBasicMaterial color={neonAccent} transparent opacity={0.8} />
+            </mesh>
+            {/* Grip */}
+            <mesh position={[0, -0.09, -0.05]} rotation={[-0.3, 0, 0]}>
+              <boxGeometry args={[0.05, 0.13, 0.065]} />
+              <meshStandardMaterial color="#020617" roughness={0.8} metalness={0.2} />
+            </mesh>
+            {/* Continuous High-Intensity Laser Beam in 3D Space */}
+            {isFiring && (
+              <mesh position={[0, 0.02, 8.0]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.02, 0.02, 16, 8]} />
+                <meshBasicMaterial color={neonAccent} transparent opacity={0.85} />
+              </mesh>
+            )}
+          </group>
+        )}
 
-        {/* Neon Energy Core / Battery Strip */}
-        <mesh position={[0, 0.005, -0.02]}>
-          <boxGeometry args={[0.074, 0.025, 0.18]} />
-          <meshBasicMaterial color="#00f0ff" />
-        </mesh>
+        {/* WEAPON TYPE: RAILGUN / SNIPER */}
+        {weaponType === 'sniper' && (
+          <group>
+            {/* Heavy Chassis */}
+            <mesh position={[0, 0, 0]} castShadow>
+              <boxGeometry args={[0.07, 0.09, 0.55]} />
+              <meshStandardMaterial color="#020617" roughness={0.2} metalness={0.92} />
+            </mesh>
+            {/* Railgun Dual Magnetic Rails */}
+            <mesh position={[-0.02, 0.035, 0.42]} rotation={[Math.PI / 2, 0, 0]}>
+              <boxGeometry args={[0.015, 0.35, 0.015]} />
+              <meshStandardMaterial color="#475569" roughness={0.1} metalness={0.98} />
+            </mesh>
+            <mesh position={[0.02, 0.035, 0.42]} rotation={[Math.PI / 2, 0, 0]}>
+              <boxGeometry args={[0.015, 0.35, 0.015]} />
+              <meshStandardMaterial color="#475569" roughness={0.1} metalness={0.98} />
+            </mesh>
+            {/* High-Tech Sniper Scope Tube */}
+            <mesh position={[0, 0.1, 0.05]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.03, 0.03, 0.28, 16]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.2} metalness={0.95} />
+            </mesh>
+            {/* Scope Glowing Glass */}
+            <mesh position={[0, 0.1, 0.19]}>
+              <circleGeometry args={[0.026, 16]} />
+              <meshBasicMaterial color={neonAccent} transparent opacity={0.8} />
+            </mesh>
+            {/* Capacitor Pulse Strip */}
+            <mesh position={[0, 0.01, 0.12]}>
+              <boxGeometry args={[0.076, 0.03, 0.28]} />
+              <meshBasicMaterial color={neonAccent} />
+            </mesh>
+            {/* Heavy Grip */}
+            <mesh position={[0, -0.1, -0.12]} rotation={[-0.3, 0, 0]}>
+              <boxGeometry args={[0.052, 0.15, 0.07]} />
+              <meshStandardMaterial color="#0b0f19" roughness={0.8} metalness={0.2} />
+            </mesh>
+          </group>
+        )}
 
-        {/* Weapon Grip / Handle */}
-        <mesh position={[0, -0.09, -0.06]} rotation={[-0.3, 0, 0]}>
-          <boxGeometry args={[0.055, 0.14, 0.07]} />
-          <meshStandardMaterial color="#0b0f19" roughness={0.8} metalness={0.2} />
-        </mesh>
-
-        {/* Holographic Reflex Sight Frame */}
-        <mesh position={[0, 0.088, 0.02]}>
-          <boxGeometry args={[0.04, 0.04, 0.05]} />
-          <meshStandardMaterial color="#111827" roughness={0.4} metalness={0.8} />
-        </mesh>
-
-        {/* Holographic Sight Reticle Glass */}
-        <mesh position={[0, 0.095, 0.02]}>
-          <planeGeometry args={[0.032, 0.032]} />
-          <meshBasicMaterial color="#00f0ff" transparent opacity={0.65} side={THREE.DoubleSide} />
-        </mesh>
-
-        {/* Muzzle Flash Point Light */}
+        {/* Dynamic Muzzle Flash Point Light */}
         <pointLight
           ref={muzzleFlashRef}
-          position={[0, 0.04, 0.3]}
-          color="#00f0ff"
-          distance={6}
+          position={[0, 0.035, 0.45]}
+          color={neonAccent}
+          distance={8}
           intensity={0}
         />
-
-        {/* Continuous Beam Emitter for Tracking Scenarios */}
-        {isBeam && isFiring && (
-          <mesh position={[0, 0.04, 5.0]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.015, 0.015, 10, 8]} />
-            <meshBasicMaterial color="#00f0ff" transparent opacity={0.7} />
-          </mesh>
-        )}
       </group>
     </group>
   );
