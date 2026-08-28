@@ -3,12 +3,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Global Singleton Cache for Instant 0ms Weapon Switching (No Lag, No Freezing)
-let cachedSheriffModel: THREE.Group | null = null;
+let cachedSheriffGroup: THREE.Group | null = null;
 let isSheriffLoading = false;
-const loadingCallbacks: Array<(model: THREE.Group) => void> = [];
+const loadingCallbacks: Array<(group: THREE.Group) => void> = [];
 
 function preloadArcaneSheriff() {
-  if (cachedSheriffModel || isSheriffLoading) return;
+  if (cachedSheriffGroup || isSheriffLoading) return;
   isSheriffLoading = true;
 
   const textureLoader = new THREE.TextureLoader();
@@ -17,58 +17,56 @@ function preloadArcaneSheriff() {
 
   diffuseMap.colorSpace = THREE.SRGBColorSpace;
 
+  const pbrMat = new THREE.MeshStandardMaterial({
+    map: diffuseMap,
+    normalMap: normalMap,
+    roughness: 0.28,
+    metalness: 0.88,
+    side: THREE.DoubleSide
+  });
+
   const gltfLoader = new GLTFLoader();
   gltfLoader.load(
     '/models/arcane_sheriff/source/Arcane Sheriff.glb',
     gltf => {
-      const rootScene = gltf.scene;
+      const weaponGroup = new THREE.Group();
+      let foundMesh = false;
 
-      // 1. Reset all root node and child root offset translations
-      rootScene.position.set(0, 0, 0);
-      rootScene.rotation.set(0, 0, 0);
-      rootScene.scale.set(1, 1, 1);
+      gltf.scene.traverse(child => {
+        if ((child as THREE.Mesh).isMesh && !foundMesh) {
+          const original = child as THREE.Mesh;
+          foundMesh = true;
 
-      rootScene.traverse(child => {
-        if (child.name === 'Arcane-Sheriff') {
-          child.position.set(0, 0, 0);
-        }
-        if ((child as THREE.Mesh).isMesh) {
-          const mesh = child as THREE.Mesh;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
+          // 1. Clone raw vertex geometry (completely eliminates bone/skeleton offsets)
+          const geom = original.geometry.clone();
+          geom.center(); // Center around origin (0, 0, 0)
+          geom.computeVertexNormals();
 
-          const pbrMat = new THREE.MeshStandardMaterial({
-            map: diffuseMap,
-            normalMap: normalMap,
-            roughness: 0.32,
-            metalness: 0.88,
-            side: THREE.DoubleSide
-          });
+          // 2. Create static Mesh
+          const staticMesh = new THREE.Mesh(geom, pbrMat);
+          staticMesh.castShadow = true;
+          staticMesh.receiveShadow = true;
 
-          mesh.material = pbrMat;
+          // 3. Raw geometry length is along +X -> Rotate 90 deg around Y so it points along +Z
+          // (which under parent 180 deg viewmodel rotation points forward into crosshair)
+          staticMesh.rotation.set(0, Math.PI / 2, 0);
+          staticMesh.scale.setScalar(0.72); // 30cm authentic revolver length
+          staticMesh.position.set(0, 0.02, -0.05); // Grip alignment
+
+          weaponGroup.add(staticMesh);
         }
       });
 
-      // 2. Wrap in pivot group with barrel pointed forward (-Z) and grip centered
-      const wrapperGroup = new THREE.Group();
-      
-      // Rotate 90 degrees around Y so barrel pointing +X turns to point along -Z
-      rootScene.rotation.set(0, -Math.PI / 2, 0);
-      // Offset so trigger and grip sit naturally in hand
-      rootScene.position.set(0, -0.02, 0.12);
-      // Calibrated scale (30cm length)
-      rootScene.scale.setScalar(0.76);
-
-      wrapperGroup.add(rootScene);
-
-      cachedSheriffModel = wrapperGroup;
-      isSheriffLoading = false;
-      loadingCallbacks.forEach(cb => cb(wrapperGroup.clone()));
-      loadingCallbacks.length = 0;
+      if (weaponGroup.children.length > 0) {
+        cachedSheriffGroup = weaponGroup;
+        isSheriffLoading = false;
+        loadingCallbacks.forEach(cb => cb(weaponGroup.clone()));
+        loadingCallbacks.length = 0;
+      }
     },
     undefined,
     err => {
-      console.warn('Could not load Arcane Sheriff GLB:', err);
+      console.warn('GLB load error:', err);
       isSheriffLoading = false;
     }
   );
@@ -83,14 +81,14 @@ interface ArcaneSheriffModelProps {
 }
 
 export const ArcaneSheriffModel: React.FC<ArcaneSheriffModelProps> = ({ neonAccent = '#00f0ff' }) => {
-  const [model, setModel] = useState<THREE.Group | null>(() => (cachedSheriffModel ? cachedSheriffModel.clone() : null));
+  const [model, setModel] = useState<THREE.Group | null>(() => (cachedSheriffGroup ? cachedSheriffGroup.clone() : null));
 
   useEffect(() => {
-    if (cachedSheriffModel) {
-      setModel(cachedSheriffModel.clone());
+    if (cachedSheriffGroup) {
+      setModel(cachedSheriffGroup.clone());
     } else {
-      loadingCallbacks.push(loadedModel => {
-        setModel(loadedModel);
+      loadingCallbacks.push(loadedGroup => {
+        setModel(loadedGroup);
       });
       preloadArcaneSheriff();
     }
@@ -98,15 +96,36 @@ export const ArcaneSheriffModel: React.FC<ArcaneSheriffModelProps> = ({ neonAcce
 
   return (
     <group position={[0, 0, 0]}>
-      {model && (
-        <primitive
-          object={model}
-          rotation={[0, 0, 0]}
-        />
+      {model ? (
+        <primitive object={model} />
+      ) : (
+        /* High-Detail Procedural Arcane Revolver Fallback */
+        <group position={[0, 0, 0]}>
+          {/* Heavy Hextech Barrel */}
+          <mesh position={[0, 0.04, 0.12]} castShadow>
+            <boxGeometry args={[0.046, 0.065, 0.28]} />
+            <meshStandardMaterial color="#0f172a" roughness={0.25} metalness={0.9} />
+          </mesh>
+          {/* Cylindrical Hextech Chamber */}
+          <mesh position={[0, 0.035, -0.02]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.038, 0.038, 0.09, 16]} />
+            <meshStandardMaterial color="#1e293b" roughness={0.2} metalness={0.95} />
+          </mesh>
+          {/* Revolver Handle / Wooden-Metal Grip */}
+          <mesh position={[0, -0.07, -0.08]} rotation={[0.35, 0, 0]} castShadow>
+            <boxGeometry args={[0.042, 0.14, 0.065]} />
+            <meshStandardMaterial color="#451a03" roughness={0.4} metalness={0.3} />
+          </mesh>
+          {/* Glowing Hextech Energy Core */}
+          <mesh position={[0, 0.035, -0.02]}>
+            <cylinderGeometry args={[0.02, 0.02, 0.092, 12]} />
+            <meshBasicMaterial color="#00f0ff" />
+          </mesh>
+        </group>
       )}
 
-      {/* Hextech Glowing Cyan Aura on Cylinder */}
-      <pointLight position={[0, 0.02, 0.05]} color="#00f0ff" intensity={1.8} distance={3} />
+      {/* Hextech Glowing Cyan Light */}
+      <pointLight position={[0, 0.04, 0.02]} color="#00f0ff" intensity={2.2} distance={4} />
     </group>
   );
 };
