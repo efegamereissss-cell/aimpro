@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -21,23 +21,17 @@ function preloadArcaneSheriff() {
   gltfLoader.load(
     '/models/arcane_sheriff/source/Arcane Sheriff.glb',
     gltf => {
-      const model = gltf.scene;
+      const rootScene = gltf.scene;
 
-      // 1. Auto-scale to realistic 29cm FPS revolver dimensions
-      const initialBox = new THREE.Box3().setFromObject(model);
-      const size = initialBox.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const targetDim = 0.29;
-      const scaleFactor = targetDim / (maxDim > 0 ? maxDim : 1);
-      model.scale.setScalar(scaleFactor);
+      // 1. Reset all root node and child root offset translations
+      rootScene.position.set(0, 0, 0);
+      rootScene.rotation.set(0, 0, 0);
+      rootScene.scale.set(1, 1, 1);
 
-      // 2. Center vertices around trigger guard / grip
-      const centeredBox = new THREE.Box3().setFromObject(model);
-      const center = centeredBox.getCenter(new THREE.Vector3());
-      model.position.sub(center);
-
-      // 3. Apply High-Fidelity PBR Materials
-      model.traverse(child => {
+      rootScene.traverse(child => {
+        if (child.name === 'Arcane-Sheriff') {
+          child.position.set(0, 0, 0);
+        }
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
           mesh.castShadow = true;
@@ -46,8 +40,8 @@ function preloadArcaneSheriff() {
           const pbrMat = new THREE.MeshStandardMaterial({
             map: diffuseMap,
             normalMap: normalMap,
-            roughness: 0.35,
-            metalness: 0.85,
+            roughness: 0.32,
+            metalness: 0.88,
             side: THREE.DoubleSide
           });
 
@@ -55,9 +49,21 @@ function preloadArcaneSheriff() {
         }
       });
 
-      cachedSheriffModel = model;
+      // 2. Wrap in pivot group with barrel pointed forward (-Z) and grip centered
+      const wrapperGroup = new THREE.Group();
+      
+      // Rotate 90 degrees around Y so barrel pointing +X turns to point along -Z
+      rootScene.rotation.set(0, -Math.PI / 2, 0);
+      // Offset so trigger and grip sit naturally in hand
+      rootScene.position.set(0, -0.02, 0.12);
+      // Calibrated scale (30cm length)
+      rootScene.scale.setScalar(0.76);
+
+      wrapperGroup.add(rootScene);
+
+      cachedSheriffModel = wrapperGroup;
       isSheriffLoading = false;
-      loadingCallbacks.forEach(cb => cb(model.clone()));
+      loadingCallbacks.forEach(cb => cb(wrapperGroup.clone()));
       loadingCallbacks.length = 0;
     },
     undefined,
@@ -100,7 +106,7 @@ export const ArcaneSheriffModel: React.FC<ArcaneSheriffModelProps> = ({ neonAcce
       )}
 
       {/* Hextech Glowing Cyan Aura on Cylinder */}
-      <pointLight position={[0, 0.02, 0.02]} color="#00f0ff" intensity={1.8} distance={3} />
+      <pointLight position={[0, 0.02, 0.05]} color="#00f0ff" intensity={1.8} distance={3} />
     </group>
   );
 };
