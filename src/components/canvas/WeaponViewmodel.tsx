@@ -36,11 +36,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
   const slashProgressRef = useRef(0);
   const isSlashingRef = useRef(false);
 
-  const scenario = useGameStore(state => state.activeScenario);
   const settings = useSettingsStore(state => state.settings);
   const { camera } = useThree();
-
-  const weaponType = scenario.weaponType;
 
   // Listen for F key for inspect (can re-trigger/loop infinitely)
   useEffect(() => {
@@ -87,9 +84,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         isSlashingRef.current = true;
         slashProgressRef.current = 0;
       } else {
-        // Heavy kick for Arcane Sheriff & Prelude Vandal
-        const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'pistol' ? 0.08 : 0.07);
-        const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'pistol' ? 0.12 : 0.08);
+        const kickZ = activeWeaponSlot === 'sheriff' ? 0.09 : 0.07;
+        const kickPitch = activeWeaponSlot === 'sheriff' ? 0.13 : 0.08;
         recoilRef.current.z = Math.min(recoilRef.current.z + kickZ, 0.18);
         recoilRef.current.pitch = Math.min(recoilRef.current.pitch + kickPitch, 0.22);
       }
@@ -162,7 +158,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
             inspectRotY = -0.1 * (1.0 - easeOut);
           }
         }
-      } else if (weaponType === 'pistol') {
+      } else if (activeWeaponSlot === 'sheriff') {
         // Valorant Arcane Sheriff Cowboy Gun-Spin Inspect
         const totalDuration = 2.0;
         inspectProgressRef.current += delta / totalDuration;
@@ -186,7 +182,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           }
         }
       } else {
-        // Prelude Vandal / Primary Weapon Inspect
+        // Prelude Vandal Inspect
         const speed = 2.2;
         inspectProgressRef.current += delta * speed;
         if (inspectProgressRef.current >= Math.PI * 2) {
@@ -222,7 +218,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     let activeBasePos = vandalHipfirePos;
     if (activeWeaponSlot === 'knife') {
       activeBasePos = knifePos;
-    } else if (weaponType === 'pistol') {
+    } else if (activeWeaponSlot === 'sheriff') {
       activeBasePos = isADS ? sheriffAdsPos : new THREE.Vector3(
         sheriffHipfirePos.x + inspectOffsetPos.x,
         sheriffHipfirePos.y + inspectOffsetPos.y,
@@ -250,11 +246,9 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     groupRef.current.rotateZ(swayX * 1.0 + inspectRotZ);
 
     if (muzzleFlashRef.current) {
-      muzzleFlashRef.current.intensity = isFiring && activeWeaponSlot === 'gun' ? 5.0 : 0;
+      muzzleFlashRef.current.intensity = isFiring && activeWeaponSlot !== 'knife' ? 5.0 : 0;
     }
   });
-
-  const neonAccent = settings.video.targetColor || '#00f0ff';
 
   return (
     <group ref={groupRef}>
@@ -276,98 +270,39 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         </group>
 
         {/* ========================================================================= */}
-        {/* WEAPON SLOT 1: PRIMARY WEAPONS */}
+        {/* WEAPON SLOT 2: VALORANT ARCANE SHERIFF (REVOLVER) */}
         {/* ========================================================================= */}
-        <group visible={activeWeaponSlot === 'gun'}>
-          {/* WEAPON TYPE: VALORANT ARCANE SHERIFF (REVOLVER) */}
-          {weaponType === 'pistol' && (
-            <group position={[0, 0, 0]} rotation={[0.04, 0.06, -0.03]}>
-              <group ref={sheriffSpinRef} position={[0, -0.04, 0]}>
-                <group position={[0, 0.04, 0]}>
-                  <ArcaneSheriffModel />
-                </group>
-              </group>
+        <group
+          visible={activeWeaponSlot === 'sheriff'}
+          position={[0, 0, 0]}
+          rotation={[0.04, 0.06, -0.03]}
+        >
+          <group ref={sheriffSpinRef} position={[0, -0.04, 0]}>
+            <group position={[0, 0.04, 0]}>
+              <ArcaneSheriffModel />
             </group>
-          )}
-
-          {/* WEAPON TYPE: VALORANT PRELUDE TO CHAOS VANDAL (BLUE) */}
-          {weaponType === 'rifle' && (
-            <group position={[0, 0, 0]} rotation={[0.03, 0.05, -0.02]}>
-              <PreludeVandalModel />
-            </group>
-          )}
-
-          {/* WEAPON TYPE: CONTINUOUS BEAM LASER */}
-          {weaponType === 'beam' && (
-            <group>
-              <mesh position={[0, 0, 0]} castShadow>
-                <boxGeometry args={[0.07, 0.09, 0.34]} />
-                <meshStandardMaterial color="#0b0f19" roughness={0.3} metalness={0.85} />
-              </mesh>
-              <mesh position={[0, 0.02, 0.22]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.028, 0.028, 0.14, 16]} />
-                <meshStandardMaterial color="#1e293b" roughness={0.2} metalness={0.95} />
-              </mesh>
-              <mesh position={[0, 0.02, 0.0]}>
-                <boxGeometry args={[0.075, 0.06, 0.22]} />
-                <meshBasicMaterial color={neonAccent} transparent opacity={0.8} />
-              </mesh>
-              <mesh position={[0, -0.09, -0.05]} rotation={[-0.3, 0, 0]}>
-                <boxGeometry args={[0.05, 0.13, 0.065]} />
-                <meshStandardMaterial color="#020617" roughness={0.8} metalness={0.2} />
-              </mesh>
-              {isFiring && (
-                <mesh position={[0, 0.02, 8.0]} rotation={[Math.PI / 2, 0, 0]}>
-                  <cylinderGeometry args={[0.02, 0.02, 16, 8]} />
-                  <meshBasicMaterial color={neonAccent} transparent opacity={0.85} />
-                </mesh>
-              )}
-            </group>
-          )}
-
-          {/* WEAPON TYPE: RAILGUN / SNIPER */}
-          {weaponType === 'sniper' && (
-            <group>
-              <mesh position={[0, 0, 0]} castShadow>
-                <boxGeometry args={[0.07, 0.09, 0.55]} />
-                <meshStandardMaterial color="#020617" roughness={0.2} metalness={0.92} />
-              </mesh>
-              <mesh position={[-0.02, 0.035, 0.42]} rotation={[Math.PI / 2, 0, 0]}>
-                <boxGeometry args={[0.015, 0.35, 0.015]} />
-                <meshStandardMaterial color="#475569" roughness={0.1} metalness={0.98} />
-              </mesh>
-              <mesh position={[0.02, 0.035, 0.42]} rotation={[Math.PI / 2, 0, 0]}>
-                <boxGeometry args={[0.015, 0.35, 0.015]} />
-                <meshStandardMaterial color="#475569" roughness={0.1} metalness={0.98} />
-              </mesh>
-              <mesh position={[0, 0.1, 0.05]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.03, 0.03, 0.28, 16]} />
-                <meshStandardMaterial color="#0f172a" roughness={0.2} metalness={0.95} />
-              </mesh>
-              <mesh position={[0, 0.1, 0.19]}>
-                <circleGeometry args={[0.026, 16]} />
-                <meshBasicMaterial color={neonAccent} transparent opacity={0.8} />
-              </mesh>
-              <mesh position={[0, 0.01, 0.12]}>
-                <boxGeometry args={[0.076, 0.03, 0.28]} />
-                <meshBasicMaterial color={neonAccent} />
-              </mesh>
-              <mesh position={[0, -0.1, -0.12]} rotation={[-0.3, 0, 0]}>
-                <boxGeometry args={[0.052, 0.15, 0.07]} />
-                <meshStandardMaterial color="#0b0f19" roughness={0.8} metalness={0.2} />
-              </mesh>
-            </group>
-          )}
-
-          {/* Dynamic Muzzle Flash Point Light */}
-          <pointLight
-            ref={muzzleFlashRef}
-            position={[0, 0.035, 0.52]}
-            color="#00f0ff"
-            distance={8}
-            intensity={0}
-          />
+          </group>
         </group>
+
+        {/* ========================================================================= */}
+        {/* WEAPON SLOT 1: VALORANT PRELUDE TO CHAOS VANDAL (BLUE) */}
+        {/* ========================================================================= */}
+        <group
+          visible={activeWeaponSlot === 'vandal' || activeWeaponSlot === 'gun'}
+          position={[0, 0, 0]}
+          rotation={[0.03, 0.05, -0.02]}
+        >
+          <PreludeVandalModel />
+        </group>
+
+        {/* Dynamic Muzzle Flash Point Light */}
+        <pointLight
+          ref={muzzleFlashRef}
+          position={[0, 0.035, 0.52]}
+          color="#00f0ff"
+          distance={8}
+          intensity={0}
+        />
       </group>
     </group>
   );

@@ -39,7 +39,7 @@ function preloadArcaneSheriff() {
 
           // 1. Clone raw vertex geometry
           const geom = original.geometry.clone();
-          geom.center(); // Center around origin (0, 0, 0)
+          geom.center();
           geom.computeVertexNormals();
 
           // 2. Create clean static Mesh with PBR materials

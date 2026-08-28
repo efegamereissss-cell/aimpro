@@ -11,51 +11,18 @@ function preloadPreludeVandal() {
   if (cachedVandalGroup || isVandalLoading) return;
   isVandalLoading = true;
 
-  const textureLoader = new THREE.TextureLoader();
-  const bodyDiffuseMap = textureLoader.load('/models/prelude_vandal/textures/AK_DemonStone_v3_DF_0.png');
-  const bodyNormalMap = textureLoader.load('/models/prelude_vandal/textures/AK_DemonStone_v3_NM_1.png');
-  const magDiffuseMap = textureLoader.load('/models/prelude_vandal/textures/AK_Demonstone_Magazine_v3_DF_2.png');
-  const magNormalMap = textureLoader.load('/models/prelude_vandal/textures/AK_DemonStone_Magazine_v2_NM_3.png');
-
-  bodyDiffuseMap.colorSpace = THREE.SRGBColorSpace;
-  magDiffuseMap.colorSpace = THREE.SRGBColorSpace;
-
-  // 1. Main Body PBR Material
-  const bodyMat = new THREE.MeshStandardMaterial({
-    map: bodyDiffuseMap,
-    normalMap: bodyNormalMap,
-    roughness: 0.28,
-    metalness: 0.88,
-    side: THREE.DoubleSide
-  });
-
-  // 2. Magazine PBR Material
-  const magMat = new THREE.MeshStandardMaterial({
-    map: magDiffuseMap,
-    normalMap: magNormalMap,
-    roughness: 0.3,
-    metalness: 0.85,
-    side: THREE.DoubleSide
-  });
-
-  // 3. Glowing Electric Blue Core Material
-  const emissiveMat = new THREE.MeshStandardMaterial({
-    color: '#020617',
-    emissive: new THREE.Color('#00f0ff'),
-    emissiveIntensity: 3.2,
-    roughness: 0.1,
-    metalness: 0.95,
-    side: THREE.DoubleSide
-  });
-
   const gltfLoader = new GLTFLoader();
   gltfLoader.load(
     '/models/prelude_vandal/source/Prelude Vandal (Blue).glb',
     gltf => {
-      const weaponGroup = new THREE.Group();
+      const rootScene = gltf.scene;
 
-      gltf.scene.traverse(child => {
-        // Reset node coordinate displacement
+      // 1. Reset root node coordinate translations
+      rootScene.position.set(0, 0, 0);
+      rootScene.rotation.set(0, 0, 0);
+      rootScene.scale.set(1, 1, 1);
+
+      rootScene.traverse(child => {
         if (child.name.includes('Prelude-Vandal')) {
           child.position.set(0, 0, 0);
         }
@@ -65,31 +32,40 @@ function preloadPreludeVandal() {
           mesh.castShadow = true;
           mesh.receiveShadow = true;
 
-          // Apply appropriate multi-materials based on primitive slot
+          // Ensure materials are double-sided and boost electric blue emissives
           if (Array.isArray(mesh.material)) {
-            mesh.material = [emissiveMat, bodyMat, emissiveMat];
-          } else {
-            if (mesh.name.includes('Mag')) {
-              mesh.material = magMat;
-            } else {
-              mesh.material = bodyMat;
+            mesh.material.forEach(mat => {
+              mat.side = THREE.DoubleSide;
+              if (mat.name.includes('Emmisive') || mat.name.includes('Decal')) {
+                (mat as THREE.MeshStandardMaterial).emissive = new THREE.Color('#00f0ff');
+                (mat as THREE.MeshStandardMaterial).emissiveIntensity = 3.0;
+              }
+            });
+          } else if (mesh.material) {
+            mesh.material.side = THREE.DoubleSide;
+            if (mesh.material.name.includes('Emmisive') || mesh.material.name.includes('Decal')) {
+              (mesh.material as THREE.MeshStandardMaterial).emissive = new THREE.Color('#00f0ff');
+              (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 3.0;
             }
           }
         }
       });
 
-      // Wrap in aligned group:
-      // Center along X (0.245) and rotate -90 deg around Y so barrel (+X) points straight into crosshair (-Z)
-      const alignedGroup = new THREE.Group();
-      gltf.scene.position.set(-0.24, 0.02, 0.0);
-      gltf.scene.rotation.set(0, -Math.PI / 2, 0);
-      gltf.scene.scale.setScalar(0.62); // 78cm authentic assault rifle length
+      // 2. Wrap in pivot group with barrel pointing forward (-Z)
+      const wrapperGroup = new THREE.Group();
 
-      alignedGroup.add(gltf.scene);
+      // Raw geometry length is along +X -> Rotate -90 deg around Y so it points along -Z
+      rootScene.rotation.set(0, -Math.PI / 2, 0);
+      // Offset center and align grip with right hand
+      rootScene.position.set(0, 0.02, 0.14);
+      // Calibrated 76cm assault rifle length
+      rootScene.scale.setScalar(0.64);
 
-      cachedVandalGroup = alignedGroup;
+      wrapperGroup.add(rootScene);
+
+      cachedVandalGroup = wrapperGroup;
       isVandalLoading = false;
-      loadingCallbacks.forEach(cb => cb(alignedGroup.clone()));
+      loadingCallbacks.forEach(cb => cb(wrapperGroup.clone()));
       loadingCallbacks.length = 0;
     },
     undefined,
@@ -104,11 +80,7 @@ if (typeof window !== 'undefined') {
   preloadPreludeVandal();
 }
 
-interface PreludeVandalModelProps {
-  neonAccent?: string;
-}
-
-export const PreludeVandalModel: React.FC<PreludeVandalModelProps> = ({ neonAccent = '#00f0ff' }) => {
+export const PreludeVandalModel: React.FC = () => {
   const [model, setModel] = useState<THREE.Group | null>(() => (cachedVandalGroup ? cachedVandalGroup.clone() : null));
 
   useEffect(() => {
@@ -126,8 +98,8 @@ export const PreludeVandalModel: React.FC<PreludeVandalModelProps> = ({ neonAcce
     <group position={[0, 0, 0]}>
       {model && <primitive object={model} />}
 
-      {/* Electric Blue Internal Chamber Light */}
-      <pointLight position={[0, 0.06, 0.12]} color="#00f0ff" intensity={2.8} distance={4} />
+      {/* Internal Electric Blue Core Glow */}
+      <pointLight position={[0, 0.04, 0.08]} color="#00f0ff" intensity={2.5} distance={4} />
     </group>
   );
 };

@@ -17,7 +17,7 @@ export type GameStatus = 'idle' | 'countdown' | 'playing' | 'paused' | 'results'
 interface GameStore {
   activeScenario: ScenarioConfig;
   status: GameStatus;
-  activeWeaponSlot: 'gun' | 'knife';
+  activeWeaponSlot: 'vandal' | 'sheriff' | 'knife' | 'gun';
   timeRemaining: number;
   score: number;
   shotsFired: number;
@@ -35,7 +35,7 @@ interface GameStore {
 
   // Actions
   setScenario: (scenario: ScenarioConfig) => void;
-  setWeaponSlot: (slot: 'gun' | 'knife') => void;
+  setWeaponSlot: (slot: 'vandal' | 'sheriff' | 'knife' | 'gun') => void;
   startCountdown: () => void;
   startGame: () => void;
   pauseGame: () => void;
@@ -90,7 +90,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
 
-  setWeaponSlot: (slot: 'gun' | 'knife') => {
+  setWeaponSlot: (slot: 'vandal' | 'sheriff' | 'knife' | 'gun') => {
     set({ activeWeaponSlot: slot });
   },
 

@@ -356,6 +356,33 @@ class ProceduralSoundEngine {
       // ignore
     }
   }
+
+  public playBhopJump() {
+    try {
+      this.init();
+      if (!this.ctx || !this.masterGain) return;
+
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, now);
+      osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+
+      gain.gain.setValueAtTime(this.masterVolume * 0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export const soundEngine = new ProceduralSoundEngine();
+

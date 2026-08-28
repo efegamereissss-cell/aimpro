@@ -100,16 +100,28 @@ export const GameHUD: React.FC = () => {
       {/* Bottom Bar: Interactive Weapon Slots, Speedometer & Keybindings */}
       <div className="w-full flex items-center justify-between text-xs font-bold text-cyber-muted tracking-wider uppercase">
         <div className="flex items-center gap-2.5 pointer-events-auto">
-          {/* Slot 1: Gun */}
+          {/* Slot 1: Prelude Vandal */}
           <button
-            onClick={() => setWeaponSlot('gun')}
+            onClick={() => setWeaponSlot('vandal')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all ${
-              activeWeaponSlot === 'gun'
-                ? 'bg-cyber-primary text-black font-black border-cyber-primary shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+              activeWeaponSlot === 'vandal' || activeWeaponSlot === 'gun'
+                ? 'bg-cyber-primary text-black font-black border-cyber-primary shadow-[0_0_15px_rgba(0,240,255,0.5)]'
                 : 'bg-cyber-card/90 text-white border-cyber-border hover:border-cyber-primary'
             }`}
           >
-            <kbd className="font-mono font-black">1</kbd> Gun Blaster
+            <kbd className="font-mono font-black">1</kbd> Prelude Vandal
+          </button>
+
+          {/* Slot 2: Arcane Sheriff */}
+          <button
+            onClick={() => setWeaponSlot('sheriff')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all ${
+              activeWeaponSlot === 'sheriff'
+                ? 'bg-amber-400 text-black font-black border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]'
+                : 'bg-cyber-card/90 text-white border-cyber-border hover:border-amber-400'
+            }`}
+          >
+            <kbd className="font-mono font-black">2</kbd> Arcane Sheriff
           </button>
 
           {/* Slot 3: RGX Karambit */}
