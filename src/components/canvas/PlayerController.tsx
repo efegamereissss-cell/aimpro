@@ -68,10 +68,12 @@ export const PlayerController: React.FC = () => {
 
   // Checkpoint respawn location
   const lastCheckpointPos = useRef(new THREE.Vector3(0, 2.7, 0));
+  const prevPositionRef = useRef(new THREE.Vector3(0, 2.7, 0));
 
   // Base camera setup
   useEffect(() => {
     camera.position.set(0, 2.7, 0);
+    prevPositionRef.current.set(0, 2.7, 0);
     yawRef.current = 0;
     pitchRef.current = 0;
     velocityRef.current.set(0, 0, 0);
@@ -303,7 +305,7 @@ export const PlayerController: React.FC = () => {
     };
   }, [camera, gl, requestLock, pauseGame, restartGame, setWeaponSlot]);
 
-  // Main Simulation Loop with CS 1.6 Air-Accelerate & Parkour Physics
+  // Main Simulation Loop with Continuous Collision & Fast Strafe-Jump Acceleration
   useFrame((_, delta) => {
     if (gameStatusRef.current === 'playing') {
       tickGame(delta);
@@ -346,13 +348,13 @@ export const PlayerController: React.FC = () => {
           }
         }
 
-        // Jump Execution
+        // Jump Execution (Instantaneous Auto-Bhop)
         if (keys.jump) {
           velocityRef.current.y = CS_16_CONFIG.jumpImpulse;
           isGroundedRef.current = false;
         }
       } else {
-        // In the Air: CS 1.6 Strafe-Jump Air Acceleration Math
+        // In the Air: High-Speed CS 1.6 Strafe-Jump Air Acceleration Math
         if (wishDir.lengthSq() > 0) {
           calculateAirAcceleration(velocityRef.current, wishDir, delta, CS_16_CONFIG);
         }
@@ -361,57 +363,67 @@ export const PlayerController: React.FC = () => {
         velocityRef.current.y -= CS_16_CONFIG.gravity * delta;
       }
 
+      // Save previous position for continuous swept collision
+      prevPositionRef.current.copy(camera.position);
+
       // 3. Integrate Position
       camera.position.x += velocityRef.current.x * delta;
       camera.position.y += velocityRef.current.y * delta;
       camera.position.z += velocityRef.current.z * delta;
 
-      // 4. Platform Collision Checking (Bhop Parkour Map)
+      // 4. Continuous Swept Collision Detection (Never clips through blocks)
       let onPlatform = false;
       let platformTopY = 0;
 
       if (isBhopScenario) {
         const pX = camera.position.x;
         const pY = camera.position.y - 1.7; // feet height
+        const prevY = prevPositionRef.current.y - 1.7;
         const pZ = camera.position.z;
 
         for (const plat of BHOP_PLATFORMS) {
           const [platX, platY, platZ] = plat.position;
           const [w, h, d] = plat.size;
-          const halfW = w / 2 + 0.3;
-          const halfD = d / 2 + 0.3;
+          const halfW = w / 2 + 0.45;
+          const halfD = d / 2 + 0.45;
           const topSurface = platY + h / 2;
 
+          // Check if horizontal position is inside platform bounds
           if (
             pX >= platX - halfW &&
             pX <= platX + halfW &&
             pZ >= platZ - halfD &&
-            pZ <= platZ + halfD &&
-            pY >= topSurface - 0.4 &&
-            pY <= topSurface + 0.35 &&
-            velocityRef.current.y <= 0
+            pZ <= platZ + halfD
           ) {
-            onPlatform = true;
-            platformTopY = topSurface + 1.7;
+            // Swept vertical landing test: fell through or standing on top surface
+            const isSweepingLanding = prevY >= topSurface - 0.2 && pY <= topSurface + 0.45;
+            const isCurrentlyOnTop = pY >= topSurface - 0.25 && pY <= topSurface + 0.6;
 
-            // Speed booster pad
-            if (plat.isBooster) {
-              const boostDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
-              velocityRef.current.x += boostDir.x * 8.0;
-              velocityRef.current.z += boostDir.z * 8.0;
-              velocityRef.current.y = 8.5; // mega jump launch
-            }
+            if ((isSweepingLanding || isCurrentlyOnTop) && velocityRef.current.y <= 0.1) {
+              onPlatform = true;
+              platformTopY = topSurface + 1.7;
 
-            if (plat.isCheckpoint) {
-              lastCheckpointPos.current.set(platX, topSurface + 1.7, platZ);
+              // Speed booster pad
+              if (plat.isBooster) {
+                const boostDir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yawRef.current);
+                velocityRef.current.x = boostDir.x * 16.0;
+                velocityRef.current.z = boostDir.z * 16.0;
+                velocityRef.current.y = 9.5;
+                isGroundedRef.current = false;
+              }
+
+              if (plat.isCheckpoint) {
+                lastCheckpointPos.current.set(platX, topSurface + 1.7, platZ);
+              }
+              break;
             }
-            break;
           }
         }
 
-        // Fall into void reset
+        // Fall into void reset (Instant checkpoint respawn)
         if (camera.position.y < -3.0) {
           camera.position.copy(lastCheckpointPos.current);
+          prevPositionRef.current.copy(lastCheckpointPos.current);
           velocityRef.current.set(0, 0, 0);
           isGroundedRef.current = true;
         }
@@ -427,9 +439,11 @@ export const PlayerController: React.FC = () => {
 
       if (onPlatform) {
         camera.position.y = platformTopY;
-        velocityRef.current.y = 0;
+        if (velocityRef.current.y < 0) {
+          velocityRef.current.y = 0;
+        }
         isGroundedRef.current = true;
-      } else if (camera.position.y > platformTopY) {
+      } else if (camera.position.y > platformTopY + 0.1) {
         isGroundedRef.current = false;
       }
     }

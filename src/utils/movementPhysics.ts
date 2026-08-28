@@ -1,28 +1,28 @@
 import * as THREE from 'three';
 
 /**
- * CS 1.6 / Source Engine Strafe-Acceleration & Bunnyhop Physics Engine
- * Implements authentic GoldSrc / Quake 3 air-accelerate vector projection math.
+ * CS 1.6 / Source Engine Strafe-Acceleration & Fast Bunnyhop Physics Engine
+ * High-performance bhop server calibration with explosive air-acceleration.
  */
 
 export interface MovementConfig {
-  gravity: number;             // e.g. 22.0 m/s^2 (CS 1.6 style)
-  jumpImpulse: number;         // e.g. 6.2 m/s (gives ~45 units jump height)
-  groundFriction: number;      // e.g. 14.0 m/s^2
-  groundMaxSpeed: number;      // e.g. 6.0 m/s (250 UPS)
-  groundAccel: number;         // e.g. 40.0 m/s^2
-  airAccelerate: number;       // e.g. 120.0 (allows sharp strafe acceleration)
-  maxAirWishSpeed: number;     // e.g. 1.2 m/s (30 UPS air cap for wishDir projection)
+  gravity: number;             // Gravity acceleration (m/s^2)
+  jumpImpulse: number;         // Vertical launch impulse
+  groundFriction: number;      // Ground deceleration friction
+  groundMaxSpeed: number;      // Max ground walk speed
+  groundAccel: number;         // Ground acceleration rate
+  airAccelerate: number;       // Air-strafe acceleration multiplier
+  maxAirWishSpeed: number;     // Air projection speed cap
 }
 
 export const CS_16_CONFIG: MovementConfig = {
-  gravity: 20.0,
-  jumpImpulse: 6.4,
-  groundFriction: 14.0,
-  groundMaxSpeed: 6.25, // 250 units/s in Source
-  groundAccel: 45.0,
-  airAccelerate: 140.0,
-  maxAirWishSpeed: 1.5
+  gravity: 19.5,
+  jumpImpulse: 6.8,
+  groundFriction: 12.0,
+  groundMaxSpeed: 7.5,
+  groundAccel: 55.0,
+  airAccelerate: 750.0, // High-speed responsive strafe acceleration
+  maxAirWishSpeed: 30.0
 };
 
 export function calculateAirAcceleration(
@@ -33,16 +33,16 @@ export function calculateAirAcceleration(
 ): THREE.Vector3 {
   const wishSpeed = config.maxAirWishSpeed;
   
-  // Project current velocity onto wish direction
-  const currentSpeed = velocity.dot(wishDir);
+  // Project velocity onto wish direction
+  const currentSpeed = velocity.x * wishDir.x + velocity.z * wishDir.z;
   const addSpeed = wishSpeed - currentSpeed;
 
   if (addSpeed <= 0) {
     return velocity;
   }
 
-  // Authentic Source/GoldSrc air-accelerate formula
-  const accelSpeed = Math.min(addSpeed, config.airAccelerate * wishSpeed * delta);
+  // Fast Source/GoldSrc air-accelerate calculation
+  const accelSpeed = Math.min(addSpeed, config.airAccelerate * delta * 2.5);
 
   velocity.x += wishDir.x * accelSpeed;
   velocity.z += wishDir.z * accelSpeed;
@@ -57,15 +57,13 @@ export function calculateStrafeSync(
 ): number {
   if (Math.abs(mouseDeltaX) < 0.5) return 100;
   
-  // Turning left with A pressed or turning right with D pressed
   if ((mouseDeltaX < -0.5 && isLeftDown && !isRightDown) ||
       (mouseDeltaX > 0.5 && isRightDown && !isLeftDown)) {
     return 100;
   }
   
-  // Conflicting inputs
   if (isLeftDown && isRightDown) return 40;
   if (!isLeftDown && !isRightDown) return 70;
   
-  return 20; // Counter-strafing in air (kills speed in real cs)
+  return 20;
 }

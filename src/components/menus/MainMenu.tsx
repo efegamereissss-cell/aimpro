@@ -18,11 +18,12 @@ import {
   Sliders, 
   Activity, 
   Clock, 
-  ChevronRight,
-  Cpu,
-  Layers,
-  FastForward,
-  Wind
+  Cpu, 
+  Layers, 
+  Wind,
+  BarChart2,
+  FolderOpen,
+  PlusCircle
 } from 'lucide-react';
 
 interface MainMenuProps {
@@ -40,7 +41,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onOpenStats,
   onOpenSettings
 }) => {
-  const [activeCategory, setActiveCategory] = useState<Category>('strafing');
+  const [activeCategory, setActiveCategory] = useState<Category>('clicking');
 
   const settings = useSettingsStore(state => state.settings);
   const updateSens = useSettingsStore(state => state.updateSens);
@@ -76,12 +77,21 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     }
   };
 
+  const handleLaunchScenario = (sc: ScenarioConfig) => {
+    setScenario(sc);
+    startGame();
+    const canvas = document.querySelector('canvas');
+    if (canvas && document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock();
+    }
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 md:p-8 select-none space-y-6 animate-in fade-in zoom-in duration-200">
       {/* ========================================================================= */}
-      {/* 1. TOP HEADER BRAND & HARDWARE STATUS BAR */}
+      {/* 1. TOP HEADER BRAND & QUICK UTILITY NAVIGATION BAR */}
       {/* ========================================================================= */}
-      <div className="glass-panel p-5 md:p-6 rounded-3xl border border-cyber-border/80 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 backdrop-blur-xl">
+      <div className="glass-panel p-4 md:p-6 rounded-3xl border border-cyber-border/80 shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 backdrop-blur-xl">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center text-black font-black shadow-[0_0_25px_rgba(0,240,255,0.6)]">
             <Target className="w-7 h-7 stroke-[2.5]" />
@@ -92,107 +102,117 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 AIMPRO <span className="text-cyber-primary">ULTIMATE</span>
               </span>
               <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyber-primary/20 text-cyber-primary border border-cyber-primary/40 tracking-wider">
-                v2.5 BHOP
+                v2.5 PRIME
               </span>
             </div>
             <span className="text-xs text-cyber-muted font-bold tracking-wider uppercase block mt-0.5">
-              Next-Gen 3D FPS Precision & CS 1.6 Movement Parkour Engine
+              Esports Precision Training & CS 1.6 Movement Parkour
             </span>
           </div>
         </div>
 
-        {/* Hardware Status Engine Indicators */}
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyber-card/80 border border-cyber-border text-xs font-mono font-bold text-white shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>240Hz Engine</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyber-card/80 border border-cyber-border text-xs font-mono font-bold text-white shadow-sm">
-            <Wind className="w-3.5 h-3.5 text-emerald-400" />
-            <span>CS 1.6 Air-Accel</span>
-          </div>
+        {/* Top Navigation Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={onOpenBrowser}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyber-card hover:bg-cyber-primary hover:text-black text-white text-xs font-black uppercase tracking-wider transition-all border border-cyber-border shadow-sm"
+          >
+            <FolderOpen className="w-4 h-4 text-cyber-primary" />
+            Senaryolar (52)
+          </button>
+          <button
+            onClick={onOpenStats}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyber-card hover:bg-cyber-primary hover:text-black text-white text-xs font-black uppercase tracking-wider transition-all border border-cyber-border shadow-sm"
+          >
+            <BarChart2 className="w-4 h-4 text-cyber-warning" />
+            İstatistikler
+          </button>
+          <button
+            onClick={onOpenStudio}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyber-card hover:bg-cyber-primary hover:text-black text-white text-xs font-black uppercase tracking-wider transition-all border border-cyber-border shadow-sm"
+          >
+            <PlusCircle className="w-4 h-4 text-cyber-accent" />
+            Stüdyo
+          </button>
           <button
             onClick={onOpenSettings}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-cyber-primary/15 hover:bg-cyber-primary hover:text-black text-cyber-primary border border-cyber-primary/30 text-xs font-black uppercase tracking-wider transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyber-primary text-black font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(0,240,255,0.4)] hover:scale-105"
           >
-            <Sliders className="w-3.5 h-3.5" />
-            Settings
+            <Sliders className="w-4 h-4" />
+            Ayarlar (Settings)
           </button>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. HERO ACTION & BHOP PARKUR LAUNCHER */}
+      {/* 2. DUAL CORE MODES: AIM ÇALIŞMASI vs BUNNY HOP PARKURU */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* BIG HERO CARD 1: CS 1.6 BUNNY HOP PARKUR */}
-        <div className="lg:col-span-2 glass-panel p-6 md:p-8 rounded-3xl border border-emerald-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-6 group hover:border-emerald-400 transition-all duration-300 backdrop-blur-xl">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/20 transition-all" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* CORE MODE 1: AIM ÇALIŞMASI & POLİGON */}
+        <div className="glass-panel p-6 md:p-8 rounded-3xl border border-cyan-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-6 group hover:border-cyan-400 transition-all duration-300 backdrop-blur-xl">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-cyan-500/20 transition-all" />
 
           <div className="space-y-3 relative z-10">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
-                <Wind className="w-4 h-4 animate-bounce" />
-                Featured Movement Mode
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 tracking-wider">
+                🎯 Mod 1: Poligon & Hedefler
               </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span className="text-xs font-mono font-bold text-cyber-muted">52 Senaryo</span>
             </div>
-            <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tight leading-none drop-shadow-md">
-              CS 1.6 Bunny Hop Parkour
+            <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-none drop-shadow-md">
+              Aim Çalışması (Poligon)
             </h2>
-            <p className="text-sm text-cyber-muted font-medium max-w-xl leading-relaxed">
-              Authentic GoldSrc / Source Air-Acceleration physics! Turn with mouse while pressing <strong className="text-white">A / D</strong> in mid-air to accelerate up to <strong className="text-emerald-400">1000+ UPS</strong> across 20 obstacle blocks, speed booster pads, and checkpoint rings!
+            <p className="text-xs md:text-sm text-cyber-muted font-medium leading-relaxed">
+              Mikro flick, kafa hizası hassasiyeti, ışın takibi ve hedef değiştirme antrenmanı. 1:1 Valorant & CS2 motoru.
             </p>
           </div>
 
-          {/* Quick Play Action Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 relative z-10 pt-2">
-            <button
-              onClick={handleLaunchBhop}
-              className="flex-1 flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 text-black py-4 px-8 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-[0_0_30px_rgba(16,185,129,0.5)] hover:shadow-[0_0_45px_rgba(16,185,129,0.8)] hover:scale-102"
-            >
-              <Play className="w-5 h-5 fill-current" />
-              Start CS 1.6 Bhop Parkour
-            </button>
-
+          <div className="flex items-center gap-3 relative z-10 pt-2">
             <button
               onClick={onQuickPlay}
-              className="flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-cyber-card hover:bg-cyber-border text-white text-xs font-black uppercase tracking-wider transition-all border border-cyber-border hover:border-cyber-primary/50"
+              className="flex-1 flex items-center justify-center gap-2.5 bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-black py-4 rounded-2xl font-black text-xs md:text-sm uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(0,240,255,0.4)] hover:scale-102"
             >
-              <Target className="w-4 h-4 text-cyber-primary" />
-              Aim Warmup (Gridshot)
+              <Play className="w-5 h-5 fill-current" />
+              Aim Çalışmasını Başlat (Gridshot)
+            </button>
+            <button
+              onClick={onOpenBrowser}
+              className="px-4 py-4 rounded-2xl bg-cyber-card hover:bg-cyber-border text-white text-xs font-black uppercase tracking-wider transition-all border border-cyber-border"
+            >
+              Tüm Liste
             </button>
           </div>
         </div>
 
-        {/* PRO WARMUP HIGHLIGHT CARD */}
-        <div className="glass-panel p-6 rounded-3xl border border-cyber-border/80 shadow-2xl flex flex-col justify-between space-y-4 backdrop-blur-xl">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 tracking-wider">
-                Pro Valorant Routine
-              </span>
-              <Trophy className="w-4 h-4 text-cyber-warning" />
-            </div>
+        {/* CORE MODE 2: CS 1.6 BUNNY HOP PARKURU */}
+        <div className="glass-panel p-6 md:p-8 rounded-3xl border border-emerald-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-6 group hover:border-emerald-400 transition-all duration-300 backdrop-blur-xl">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/20 transition-all" />
 
-            <h3 className="text-xl font-black text-white uppercase mt-3">
-              TenZ God Warmup
-            </h3>
-            <span className="text-xs font-bold text-cyber-primary block mt-0.5">
-              4-Stage Routine • 4 min
-            </span>
-            <p className="text-xs text-cyber-muted mt-2 font-medium leading-relaxed">
-              Stage 1: Gridshot Ultimate • Stage 2: Microflex Precision • Stage 3: Sixshot Dots • Stage 4: ADAD Bot Duel.
+          <div className="space-y-3 relative z-10">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 tracking-wider flex items-center gap-1.5">
+                <Wind className="w-3.5 h-3.5 animate-bounce" />
+                🐰 Mod 2: CS 1.6 Movement
+              </span>
+              <span className="text-xs font-mono font-bold text-emerald-400">1000+ UPS</span>
+            </div>
+            <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-none drop-shadow-md">
+              Bunny Hop Parkuru
+            </h2>
+            <p className="text-xs md:text-sm text-cyber-muted font-medium leading-relaxed">
+              Orijinal CS 1.6 / Source Air-Acceleration fiziği! Havada <strong className="text-white">A / D</strong> ve fare çevirerek 20 engelli parkuru yüksek hızda tamamlayın.
             </p>
           </div>
 
-          <button
-            onClick={onQuickPlay}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-cyber-card hover:bg-rose-500 hover:text-black text-white text-xs font-black uppercase tracking-wider transition-all border border-cyber-border hover:border-rose-500 shadow-md"
-          >
-            <Play className="w-4 h-4 fill-current" />
-            Start TenZ Routine
-          </button>
+          <div className="flex items-center gap-3 relative z-10 pt-2">
+            <button
+              onClick={handleLaunchBhop}
+              className="flex-1 flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 text-black py-4 rounded-2xl font-black text-xs md:text-sm uppercase tracking-wider transition-all shadow-[0_0_25px_rgba(16,185,129,0.5)] hover:scale-102"
+            >
+              <Play className="w-5 h-5 fill-current" />
+              Bunny Hop Parkurunu Başlat
+            </button>
+          </div>
         </div>
       </div>
 
@@ -204,11 +224,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <div className="flex items-center gap-2">
             <Sliders className="w-4 h-4 text-cyber-primary" />
             <span className="text-xs font-black uppercase tracking-widest text-white">
-              Live Esports Sensitivity Deck
+              Canlı Hassasiyet ve Oyun Profili
             </span>
           </div>
           <span className="text-xs font-mono text-cyber-muted">
-            1:1 Pixel-Perfect Yaw Radians Conversion
+            1:1 Piksel Hassas Açı Dönüşümü (Valorant / CS2)
           </span>
         </div>
 
@@ -216,7 +236,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           {/* Game Profile Selector */}
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-cyber-muted tracking-wider block">
-              Active Game Profile
+              Aktif Oyun Profili
             </label>
             <div className="flex items-center gap-1.5 flex-wrap">
               {gamePresets.map(preset => (
@@ -239,7 +259,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-[10px] font-black uppercase text-cyber-muted tracking-wider">
-                In-Game Sensitivity
+                Oyun İçi Hassasiyet (Sens)
               </label>
               <span className="font-mono text-base font-black text-cyber-primary">
                 {settings.controls.inGameSens.toFixed(3)}
@@ -274,7 +294,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <div className="bg-cyber-card/60 p-4 rounded-2xl border border-cyber-border flex items-center justify-between">
             <div>
               <span className="text-[10px] font-black uppercase text-cyber-muted tracking-wider block">
-                Physical Turn Distance
+                Fiziksel 360° Dönüş
               </span>
               <span className="font-mono text-2xl font-black text-cyber-neon mt-0.5 block">
                 {cm360} <span className="text-xs text-cyber-muted">cm/360°</span>
@@ -293,16 +313,24 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. CORE DISCIPLINE TRAINING MATRIX */}
+      {/* 4. AIM ÇALIŞMASI KATEGORİLERİ & HIZLI LİSTE */}
       {/* ========================================================================= */}
       <div className="space-y-4">
-        {/* Category Navigation Tabs */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black uppercase tracking-widest text-white">
+            Aim Çalışması Kategorileri
+          </span>
+          <span className="text-xs text-cyber-muted font-bold">
+            Antrenman yapmak istediğiniz alana tıklayın
+          </span>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
-            { id: 'strafing', label: 'Movement & Bhop', icon: Wind },
             { id: 'clicking', label: 'Clicking & Flick', icon: Crosshair },
             { id: 'tracking', label: 'Reactive Tracking', icon: Zap },
-            { id: 'switching', label: 'Target Switching', icon: Target }
+            { id: 'switching', label: 'Target Switching', icon: Target },
+            { id: 'strafing', label: 'Bot Düellosu & Hareket', icon: Bot }
           ].map(cat => {
             const Icon = cat.icon;
             const isSelected = activeCategory === cat.id;
@@ -323,21 +351,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           })}
         </div>
 
-        {/* 3 Featured Scenarios for Selected Category */}
+        {/* 3 Featured Scenarios */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {categoryScenarios.map(scenario => {
             const pb = personalBests[scenario.id] || 0;
             return (
               <div
                 key={scenario.id}
-                onClick={() => {
-                  setScenario(scenario);
-                  startGame();
-                  const canvas = document.querySelector('canvas');
-                  if (canvas && document.pointerLockElement !== canvas) {
-                    canvas.requestPointerLock();
-                  }
-                }}
+                onClick={() => handleLaunchScenario(scenario)}
                 className="glass-panel p-5 rounded-3xl border border-cyber-border hover:border-cyber-primary transition-all duration-200 cursor-pointer group hover:shadow-[0_0_30px_rgba(0,240,255,0.25)] flex flex-col justify-between space-y-4 hover:-translate-y-1 backdrop-blur-xl"
               >
                 <div>
@@ -367,7 +388,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         PB: {pb.toLocaleString()}
                       </span>
                     ) : (
-                      <span className="text-cyber-muted">No Record Yet</span>
+                      <span className="text-cyber-muted">Kayıt Yok</span>
                     )}
                   </div>
 
