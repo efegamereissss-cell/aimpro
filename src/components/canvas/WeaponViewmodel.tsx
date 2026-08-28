@@ -5,6 +5,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { soundEngine } from '../../audio/SoundEngine';
 import { RGXKarambitModel } from './RGXKarambitModel';
+import { ArcaneSheriffModel } from './ArcaneSheriffModel';
 
 interface WeaponViewmodelProps {
   isFiring: boolean;
@@ -21,6 +22,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const karambitSpinRef = useRef<THREE.Group>(null);
+  const sheriffSpinRef = useRef<THREE.Group>(null);
   const muzzleFlashRef = useRef<THREE.PointLight>(null);
   const recoilRef = useRef({ z: 0, pitch: 0 });
   const inspectProgressRef = useRef(0);
@@ -84,10 +86,11 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         isSlashingRef.current = true;
         slashProgressRef.current = 0;
       } else {
-        const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'rifle' ? 0.07 : 0.05);
-        const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'rifle' ? 0.08 : 0.06);
-        recoilRef.current.z = Math.min(recoilRef.current.z + kickZ, 0.16);
-        recoilRef.current.pitch = Math.min(recoilRef.current.pitch + kickPitch, 0.18);
+        // Heavy Magnum kick for Arcane Sheriff / Pistol
+        const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'pistol' ? 0.09 : 0.07);
+        const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'pistol' ? 0.14 : 0.08);
+        recoilRef.current.z = Math.min(recoilRef.current.z + kickZ, 0.18);
+        recoilRef.current.pitch = Math.min(recoilRef.current.pitch + kickPitch, 0.22);
       }
     }
     recoilRef.current.z = THREE.MathUtils.lerp(recoilRef.current.z, 0, delta * 16);
@@ -107,16 +110,18 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
       }
     }
 
-    // 5. Valorant RGX 11z Pro Karambit Inspect Animation (Exact 3-Phase Choreography)
+    // 5. Inspect Animations (Valorant RGX Karambit vs Arcane Sheriff vs Rifle)
     let inspectRotX = 0;
     let inspectRotY = 0;
     let inspectRotZ = 0;
     let inspectOffsetPos = new THREE.Vector3(0, 0, 0);
     let karambitSpinAngle = 0;
+    let sheriffSpinAngle = 0;
 
     if (isInspectingRef.current) {
       if (activeWeaponSlot === 'knife') {
-        const totalDuration = 2.4; // 2.4 seconds full Valorant inspect sequence
+        // RGX 11z Pro Karambit 3-Phase Choreography
+        const totalDuration = 2.4;
         inspectProgressRef.current += delta / totalDuration;
         const p = inspectProgressRef.current;
 
@@ -124,20 +129,16 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           isInspectingRef.current = false;
           inspectProgressRef.current = 0;
         } else {
-          // Phase 1: Lift & Ready (0.0 to 0.15)
           if (p < 0.15) {
             const ease = Math.sin((p / 0.15) * (Math.PI / 2));
             inspectOffsetPos.set(-0.03 * ease, 0.04 * ease, 0.03 * ease);
             inspectRotX = 0.15 * ease;
             inspectRotY = -0.1 * ease;
-          }
-          // Phase 2: Hypnotic Multi-Axis 360° Finger Spin with 3D Precession (0.15 to 0.82)
-          else if (p < 0.82) {
+          } else if (p < 0.82) {
             const spinP = (p - 0.15) / 0.67;
-            const fullSpins = 5.0; // 5 full 360-degree rotations
+            const fullSpins = 5.0;
             karambitSpinAngle = spinP * Math.PI * 2 * fullSpins;
 
-            // 3D Conical wobble precession around the finger ring
             inspectOffsetPos.set(
               -0.03 + Math.sin(karambitSpinAngle * 0.5) * 0.015,
               0.04 + Math.cos(karambitSpinAngle * 0.5) * 0.012,
@@ -146,9 +147,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
             inspectRotX = Math.sin(karambitSpinAngle) * 0.14;
             inspectRotY = -0.1 + Math.cos(karambitSpinAngle) * 0.12;
             inspectRotZ = Math.sin(karambitSpinAngle * 0.5) * 0.08;
-          }
-          // Phase 3: Deceleration, Thumb Flip & Snap Catch into Reverse Grip (0.82 to 1.0)
-          else {
+          } else {
             const catchP = (p - 0.82) / 0.18;
             const easeOut = 1.0 - Math.pow(1.0 - catchP, 3);
             karambitSpinAngle = Math.PI * 2 * 5.0 + Math.sin(catchP * Math.PI) * 0.4;
@@ -160,6 +159,30 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
             );
             inspectRotX = Math.sin((1.0 - catchP) * Math.PI) * 0.12;
             inspectRotY = -0.1 * (1.0 - easeOut);
+          }
+        }
+      } else if (weaponType === 'pistol') {
+        // Valorant Arcane Sheriff Cowboy Gun-Spin Inspect
+        const totalDuration = 2.0;
+        inspectProgressRef.current += delta / totalDuration;
+        const p = inspectProgressRef.current;
+
+        if (p >= 1.0) {
+          isInspectingRef.current = false;
+          inspectProgressRef.current = 0;
+        } else {
+          // Trigger-guard 360° spin & tilt
+          if (p < 0.4) {
+            const spinP = p / 0.4;
+            sheriffSpinAngle = spinP * Math.PI * 2; // 360° forward cowboy flip
+            inspectOffsetPos.set(-0.04 * Math.sin(spinP * Math.PI), 0.05 * Math.sin(spinP * Math.PI), 0);
+          } else if (p < 0.8) {
+            const tiltP = (p - 0.4) / 0.4;
+            inspectRotY = Math.sin(tiltP * Math.PI) * 0.4; // Tilt cylinder to camera
+            inspectRotX = Math.sin(tiltP * Math.PI) * -0.2;
+          } else {
+            const endP = (p - 0.8) / 0.2;
+            inspectRotY = (1.0 - endP) * 0.1;
           }
         }
       } else {
@@ -180,22 +203,39 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     if (karambitSpinRef.current) {
       karambitSpinRef.current.rotation.z = karambitSpinAngle;
     }
+    if (sheriffSpinRef.current) {
+      sheriffSpinRef.current.rotation.x = sheriffSpinAngle;
+    }
 
     // 6. Target Local Position
     const gunHipfirePos = new THREE.Vector3(0.24, -0.21, -0.48);
+    const sheriffHipfirePos = new THREE.Vector3(0.23, -0.21, -0.44);
     const gunAdsPos = new THREE.Vector3(0.0, -0.148, -0.38);
-    // Calibrated authentic Valorant first-person knife placement
+    const sheriffAdsPos = new THREE.Vector3(0.0, -0.142, -0.36);
+
     const knifePos = new THREE.Vector3(
       0.23 + inspectOffsetPos.x,
       -0.22 + inspectOffsetPos.y,
       -0.42 - slashPosZ + inspectOffsetPos.z
     );
-    const basePos = activeWeaponSlot === 'knife' ? knifePos : (isADS ? gunAdsPos : gunHipfirePos);
+
+    let activeBasePos = gunHipfirePos;
+    if (activeWeaponSlot === 'knife') {
+      activeBasePos = knifePos;
+    } else if (weaponType === 'pistol') {
+      activeBasePos = isADS ? sheriffAdsPos : new THREE.Vector3(
+        sheriffHipfirePos.x + inspectOffsetPos.x,
+        sheriffHipfirePos.y + inspectOffsetPos.y,
+        sheriffHipfirePos.z + inspectOffsetPos.z
+      );
+    } else {
+      activeBasePos = isADS ? gunAdsPos : gunHipfirePos;
+    }
 
     const localPos = new THREE.Vector3(
-      basePos.x + swayX + bobX,
-      basePos.y + swayY + bobY,
-      basePos.z + recoilRef.current.z
+      activeBasePos.x + swayX + bobX,
+      activeBasePos.y + swayY + bobY,
+      activeBasePos.z + recoilRef.current.z
     );
     const worldPos = localPos.applyMatrix4(camera.matrixWorld);
     groupRef.current.position.copy(worldPos);
@@ -216,8 +256,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     <group ref={groupRef}>
       <group rotation={[0, Math.PI, 0]}>
         {/* ========================================================================= */}
-        {/* WEAPON: VALORANT RGX 11z PRO 3.0 BLADE / KARAMBIT CLAW KNIFE */}
-        {/* Calibrated Valorant Reverse-Grip Downward Inward Stance */}
+        {/* WEAPON SLOT 3: VALORANT RGX 11z PRO 3.0 BLADE / KARAMBIT CLAW KNIFE */}
         {/* ========================================================================= */}
         <group
           visible={activeWeaponSlot === 'knife'}
@@ -233,9 +272,20 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         </group>
 
         {/* ========================================================================= */}
-        {/* PRIMARY WEAPONS (GUN SLOT) */}
+        {/* WEAPON SLOT 1: PRIMARY WEAPONS */}
         {/* ========================================================================= */}
         <group visible={activeWeaponSlot === 'gun'}>
+          {/* WEAPON TYPE: VALORANT ARCANE SHERIFF (REVOLVER) */}
+          {weaponType === 'pistol' && (
+            <group position={[0, 0, 0]} rotation={[0, 0, 0]}>
+              <group ref={sheriffSpinRef} position={[0, -0.04, 0]}>
+                <group position={[0, 0.04, 0]}>
+                  <ArcaneSheriffModel neonAccent={neonAccent} />
+                </group>
+              </group>
+            </group>
+          )}
+
           {/* WEAPON TYPE: ASSAULT RIFLE (VANDAL / CARBINE) */}
           {weaponType === 'rifle' && (
             <group>
@@ -277,40 +327,6 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
               </mesh>
               <mesh position={[0, 0.005, 0.02]}>
                 <boxGeometry args={[0.068, 0.015, 0.28]} />
-                <meshBasicMaterial color={neonAccent} />
-              </mesh>
-            </group>
-          )}
-
-          {/* WEAPON TYPE: TACTICAL PISTOL (PHANTOM BLASTER) */}
-          {weaponType === 'pistol' && (
-            <group>
-              <mesh position={[0, 0.035, 0.02]} castShadow>
-                <boxGeometry args={[0.058, 0.05, 0.26]} />
-                <meshStandardMaterial color="#0f172a" roughness={0.2} metalness={0.9} />
-              </mesh>
-              <mesh position={[0, -0.005, -0.01]}>
-                <boxGeometry args={[0.054, 0.04, 0.22]} />
-                <meshStandardMaterial color="#1e293b" roughness={0.4} metalness={0.7} />
-              </mesh>
-              <mesh position={[0, 0.035, 0.16]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.016, 0.016, 0.08, 16]} />
-                <meshStandardMaterial color="#334155" roughness={0.2} metalness={0.95} />
-              </mesh>
-              <mesh position={[0, -0.08, -0.06]} rotation={[-0.28, 0, 0]}>
-                <boxGeometry args={[0.05, 0.13, 0.06]} />
-                <meshStandardMaterial color="#020617" roughness={0.8} metalness={0.2} />
-              </mesh>
-              <mesh position={[0, 0.065, -0.08]}>
-                <boxGeometry args={[0.02, 0.012, 0.015]} />
-                <meshBasicMaterial color={neonAccent} />
-              </mesh>
-              <mesh position={[0, 0.065, 0.13]}>
-                <boxGeometry args={[0.008, 0.012, 0.012]} />
-                <meshBasicMaterial color={neonAccent} />
-              </mesh>
-              <mesh position={[0, 0.02, 0.02]}>
-                <boxGeometry args={[0.061, 0.008, 0.18]} />
                 <meshBasicMaterial color={neonAccent} />
               </mesh>
             </group>
