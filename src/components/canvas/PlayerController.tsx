@@ -38,7 +38,17 @@ export const PlayerController: React.FC = () => {
   settingsRef.current = settings;
 
   const mouseDeltaRef = useRef({ x: 0, y: 0 });
-  const movementRef = useRef({ forward: false, backward: false, left: false, right: false });
+  const keysRef = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false
+  });
+
+  // Kinematic Physics Engine State
+  const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
+  const isGroundedRef = useRef(true);
   const isMouseDownRef = useRef(false);
   const isADSDownRef = useRef(false);
   const lastShotTimeRef = useRef(0);
@@ -100,7 +110,7 @@ export const PlayerController: React.FC = () => {
       }
     }
 
-    const muzzleWorld = new THREE.Vector3(0.28, -0.25, -0.55).applyMatrix4(camera.matrixWorld);
+    const muzzleWorld = new THREE.Vector3(0.26, -0.21, -0.48).applyMatrix4(camera.matrixWorld);
 
     if (hitTargetId && hitPoint) {
       registerShot(hitTargetId, hitPoint, isHeadshot);
@@ -136,7 +146,7 @@ export const PlayerController: React.FC = () => {
     let ignoreInitialDeltas = 0;
 
     const handlePointerLockChange = () => {
-      ignoreInitialDeltas = 3; // ignore first 3 mousemove ticks to filter any recentering spike
+      ignoreInitialDeltas = 3;
       mouseDeltaRef.current = { x: 0, y: 0 };
       if (document.pointerLockElement !== gl.domElement) {
         if (gameStatusRef.current === 'playing') {
@@ -156,8 +166,7 @@ export const PlayerController: React.FC = () => {
       const deltaX = e.movementX || 0;
       const deltaY = e.movementY || 0;
 
-      // Filter hardware or OS screen-recenter glitch
-      if (Math.abs(deltaX) > 400 || Math.abs(deltaY) > 400) {
+      if (Math.abs(deltaX) > 350 || Math.abs(deltaY) > 350) {
         return;
       }
 
@@ -206,10 +215,11 @@ export const PlayerController: React.FC = () => {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'KeyW') movementRef.current.forward = true;
-      if (e.code === 'KeyS') movementRef.current.backward = true;
-      if (e.code === 'KeyA') movementRef.current.left = true;
-      if (e.code === 'KeyD') movementRef.current.right = true;
+      if (e.code === 'KeyW') keysRef.current.forward = true;
+      if (e.code === 'KeyS') keysRef.current.backward = true;
+      if (e.code === 'KeyA') keysRef.current.left = true;
+      if (e.code === 'KeyD') keysRef.current.right = true;
+      if (e.code === 'Space') keysRef.current.jump = true;
 
       if (e.code === 'Escape' || e.code === 'KeyP') {
         pauseGame();
@@ -220,10 +230,11 @@ export const PlayerController: React.FC = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'KeyW') movementRef.current.forward = false;
-      if (e.code === 'KeyS') movementRef.current.backward = false;
-      if (e.code === 'KeyA') movementRef.current.left = false;
-      if (e.code === 'KeyD') movementRef.current.right = false;
+      if (e.code === 'KeyW') keysRef.current.forward = false;
+      if (e.code === 'KeyS') keysRef.current.backward = false;
+      if (e.code === 'KeyA') keysRef.current.left = false;
+      if (e.code === 'KeyD') keysRef.current.right = false;
+      if (e.code === 'Space') keysRef.current.jump = false;
     };
 
     document.addEventListener('pointerlockchange', handlePointerLockChange);
@@ -243,11 +254,77 @@ export const PlayerController: React.FC = () => {
     };
   }, [camera, gl, requestLock, pauseGame, restartGame]);
 
-  // Main Loop
+  // Main Simulation Loop
   useFrame((_, delta) => {
     // 1. Advance Game Simulation
     if (gameStatusRef.current === 'playing') {
       tickGame(delta);
+
+      // 2. Kinematic Player Movement Physics
+      const keys = keysRef.current;
+      const moveDir = new THREE.Vector3();
+
+      if (keys.forward) moveDir.z -= 1;
+      if (keys.backward) moveDir.z += 1;
+      if (keys.left) moveDir.x -= 1;
+      if (keys.right) moveDir.x += 1;
+
+      if (moveDir.lengthSq() > 0) {
+        moveDir.normalize();
+        // Transform direction to camera horizontal orientation
+        const camEuler = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(camera.quaternion);
+        moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), camEuler.y);
+      }
+
+      // Acceleration & Friction physics
+      const accel = 35.0; // m/s^2
+      const friction = 12.0; // m/s^2
+      const maxSpeed = isADSDownRef.current ? 3.0 : 6.2; // m/s
+
+      if (moveDir.lengthSq() > 0) {
+        velocityRef.current.x += moveDir.x * accel * delta;
+        velocityRef.current.z += moveDir.z * accel * delta;
+        // Clamp horizontal velocity
+        const hVel = new THREE.Vector2(velocityRef.current.x, velocityRef.current.z);
+        if (hVel.length() > maxSpeed) {
+          hVel.setLength(maxSpeed);
+          velocityRef.current.x = hVel.x;
+          velocityRef.current.z = hVel.y;
+        }
+      } else {
+        // Apply ground friction deceleration
+        velocityRef.current.x = THREE.MathUtils.lerp(velocityRef.current.x, 0, delta * friction);
+        velocityRef.current.z = THREE.MathUtils.lerp(velocityRef.current.z, 0, delta * friction);
+      }
+
+      // Jump & Gravity Physics
+      const gravity = 18.0; // m/s^2
+      const jumpImpulse = 5.8; // m/s
+
+      if (keys.jump && isGroundedRef.current) {
+        velocityRef.current.y = jumpImpulse;
+        isGroundedRef.current = false;
+      }
+
+      if (!isGroundedRef.current) {
+        velocityRef.current.y -= gravity * delta;
+      }
+
+      // Apply displacement
+      camera.position.x += velocityRef.current.x * delta;
+      camera.position.y += velocityRef.current.y * delta;
+      camera.position.z += velocityRef.current.z * delta;
+
+      // Ground collision (eye height: 1.7m)
+      if (camera.position.y <= 1.7) {
+        camera.position.y = 1.7;
+        velocityRef.current.y = 0;
+        isGroundedRef.current = true;
+      }
+
+      // Arena boundary collision clamp
+      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -18, 18);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -10, 10);
     }
 
     // Reset mouse delta smoothly
@@ -256,13 +333,12 @@ export const PlayerController: React.FC = () => {
       y: THREE.MathUtils.lerp(mouseDeltaRef.current.y, 0, delta * 20)
     };
 
-    // 2. Continuous Firing / Tracking Handling
+    // 3. Continuous Firing / Tracking Handling
     if (isMouseDownRef.current && gameStatusRef.current === 'playing') {
       const currentScenario = activeScenarioRef.current;
       const targets = activeTargetsRef.current;
 
       if (currentScenario.weaponType === 'beam') {
-        // Continuous Beam Tracking Tick
         raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
         const ray = raycaster.current.ray;
         for (const target of targets) {
@@ -279,12 +355,14 @@ export const PlayerController: React.FC = () => {
     }
   });
 
+  const currentHorizSpeed = new THREE.Vector2(velocityRef.current.x, velocityRef.current.z).length();
+
   return (
     <WeaponViewmodel
       isFiring={isMouseDownRef.current && gameStatus === 'playing'}
       isADS={isADSDownRef.current}
       mouseDelta={mouseDeltaRef.current}
-      movementSpeed={0}
+      movementSpeed={currentHorizSpeed}
     />
   );
 };
