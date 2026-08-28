@@ -15,7 +15,7 @@ export const FPSScene: React.FC = () => {
   const effectiveFov = getEffectiveVerticalFov(videoSettings.fov);
 
   return (
-    <div className="w-full h-full relative cursor-none select-none bg-[#0a0d14]">
+    <div className="w-full h-full relative select-none bg-[#0a0d14]">
       <Canvas
         camera={{
           fov: effectiveFov,

@@ -69,6 +69,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   lastMatchStats: null,
 
   setScenario: (scenario: ScenarioConfig) => {
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
     set({
       activeScenario: scenario,
       timeRemaining: scenario.duration,
@@ -107,7 +110,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       lastHitmarker: null
     });
 
-    // Populate initial targets
     for (let i = 0; i < scenario.targetCount; i++) {
       get().spawnTarget();
     }
@@ -115,6 +117,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   pauseGame: () => {
     if (get().status === 'playing') {
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
       set({ status: 'paused' });
     }
   },
@@ -130,10 +135,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   exitToMenu: () => {
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
     set({ status: 'idle', activeTargets: [] });
   },
 
   endGame: () => {
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+
     const { 
       activeScenario, 
       score, 
@@ -186,8 +198,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     const now = Date.now();
-
-    // Update active targets movement and lifetime
     const updatedTargets: ActiveTarget[] = [];
     const scenario = state.activeScenario;
 
@@ -207,7 +217,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       } else if (target.movementPattern === 'bounce') {
         x += vx * deltaSec;
         y += vy * deltaSec;
-        vy -= 9.8 * deltaSec; // gravity
+        vy -= 9.8 * deltaSec;
         if (y <= scenario.spawnArea.yMin) {
           y = scenario.spawnArea.yMin;
           vy = Math.abs(vy) * 0.95;
@@ -231,13 +241,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         z = target.spawnPosition[2] + Math.sin(elapsed * 1.2 + target.movementPhase) * 3.0;
       }
 
-      // Check expiring targets (e.g. reflex shot)
       if (scenario.movementPattern === 'shrinking') {
         const life = 1.2 - elapsed * 1.2;
-        if (life <= 0) {
-          // expired without hit
-          return;
-        }
+        if (life <= 0) return;
       }
 
       updatedTargets.push({
@@ -248,7 +254,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
     });
 
-    // Replenish missing targets
     while (updatedTargets.length < scenario.targetCount) {
       const sp = scenario.spawnArea;
       const spawnPos: [number, number, number] = [
@@ -274,7 +279,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
     }
 
-    // Clean old floating texts & particles
     const activeTexts = state.floatingTexts.filter(t => now - t.createdAt < t.lifetime);
     const activeTracers = state.bulletTracers.filter(t => now - t.createdAt < t.duration);
     const activeParticles = state.particles
@@ -306,7 +310,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const scenario = state.activeScenario;
 
     if (!hitTargetId) {
-      // Miss shot
       soundEngine.playMissSound();
       const newStreak = 0;
       const penalty = scenario.scorePenaltyMiss;
@@ -318,7 +321,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
 
-    // Target Hit
     const targetIndex = state.activeTargets.findIndex(t => t.id === hitTargetId);
     if (targetIndex === -1) return;
 
@@ -327,7 +329,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const newStreak = state.currentStreak + 1;
     const maxStreak = Math.max(state.maxStreak, newStreak);
 
-    // Audio & Feedback
     soundEngine.playHitSound(newStreak, isHeadshot);
 
     const isKill = target.currentHealth <= 1;
