@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { UserSettings, GameSensPreset, CrosshairSettings, VideoSettings, AudioSettings } from '../types/settings';
+import { UserSettings, GameSensPreset, CrosshairSettings, VideoSettings, AudioSettings, ControlSettings } from '../types/settings';
 import { DEFAULT_SETTINGS } from '../data/defaultSettings';
 import { soundEngine } from '../audio/SoundEngine';
 
-const STORAGE_KEY = 'aimlab_pro_settings_v1';
+const STORAGE_KEY = 'aimpro_ultimate_settings_v2';
 
 function loadSavedSettings(): UserSettings {
   try {
@@ -20,6 +20,7 @@ function loadSavedSettings(): UserSettings {
 
 interface SettingsStore {
   settings: UserSettings;
+  updateControls: (controls: Partial<ControlSettings>) => void;
   updateSens: (sens: number) => void;
   updateDpi: (dpi: number) => void;
   updateGamePreset: (preset: GameSensPreset) => void;
@@ -53,6 +54,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
 
   return {
     settings: initial,
+    updateControls: (controls: Partial<ControlSettings>) => {
+      set(state => {
+        const next = {
+          ...state.settings,
+          controls: { ...state.settings.controls, ...controls }
+        };
+        save(next);
+        return { settings: next };
+      });
+    },
     updateSens: (sens: number) => {
       set(state => {
         const next = {

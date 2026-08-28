@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useSettingsStore } from '../../store/useSettingsStore';
-import { GameSensPreset } from '../../types/settings';
 import { calculateCm360, calculateEDPI } from '../../utils/sensitivity';
+import { PRO_CROSSHAIRS, exportCrosshairCode, importCrosshairCode } from '../../utils/crosshairCodes';
+import { CrosshairRenderer } from '../ui/CrosshairRenderer';
 import { soundEngine } from '../../audio/SoundEngine';
+import { GameSensPreset } from '../../types/settings';
 import { 
   X, 
   Sliders, 
@@ -10,8 +12,11 @@ import {
   Monitor, 
   Volume2, 
   RotateCcw, 
+  Copy, 
+  Download, 
+  Sparkles, 
   Check, 
-  Sparkles,
+  Palette,
   Play
 } from 'lucide-react';
 
@@ -19,15 +24,22 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+type TabType = 'controls' | 'crosshair' | 'video' | 'audio';
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState<'controls' | 'crosshair' | 'video' | 'audio'>('controls');
+  const [activeTab, setActiveTab] = useState<TabType>('controls');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [importInput, setImportInput] = useState('');
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+
   const settings = useSettingsStore(state => state.settings);
-  const updateSens = useSettingsStore(state => state.updateSens);
-  const updateDpi = useSettingsStore(state => state.updateDpi);
-  const updateGamePreset = useSettingsStore(state => state.updateGamePreset);
+  const updateControls = useSettingsStore(state => state.updateControls);
   const updateCrosshair = useSettingsStore(state => state.updateCrosshair);
   const updateVideo = useSettingsStore(state => state.updateVideo);
   const updateAudio = useSettingsStore(state => state.updateAudio);
+  const updateSens = useSettingsStore(state => state.updateSens);
+  const updateDpi = useSettingsStore(state => state.updateDpi);
+  const updateGamePreset = useSettingsStore(state => state.updateGamePreset);
   const resetToDefaults = useSettingsStore(state => state.resetToDefaults);
 
   const cm360 = calculateCm360(
@@ -48,509 +60,356 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     'Quake / Source'
   ];
 
+  const handleExportCode = () => {
+    const code = exportCrosshairCode(settings.crosshair);
+    navigator.clipboard.writeText(code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleImportCode = () => {
+    if (!importInput.trim()) return;
+    const parsed = importCrosshairCode(importInput);
+    if (parsed) {
+      updateCrosshair(parsed);
+      setImportStatus('Crosshair imported successfully!');
+      setImportInput('');
+      setTimeout(() => setImportStatus(null), 2500);
+    } else {
+      setImportStatus('Invalid crosshair profile code.');
+      setTimeout(() => setImportStatus(null), 2500);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-6 select-none overflow-y-auto">
-      <div className="w-full max-w-4xl glass-panel rounded-3xl p-8 border border-cyber-border shadow-2xl animate-in fade-in zoom-in duration-150 flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-6 border-b border-cyber-border shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 select-none overflow-y-auto">
+      <div className="w-full max-w-4xl glass-panel rounded-3xl p-6 md:p-8 border border-cyber-border shadow-2xl space-y-6 animate-in fade-in zoom-in duration-150">
+        {/* Top Header */}
+        <div className="flex items-center justify-between border-b border-cyber-border pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyber-primary/10 border border-cyber-primary/30 flex items-center justify-center text-cyber-primary">
+            <div className="w-10 h-10 rounded-2xl bg-cyber-primary/20 border border-cyber-primary flex items-center justify-center text-cyber-primary shadow-[0_0_15px_rgba(0,240,255,0.5)]">
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white uppercase tracking-tight">Platform Settings</h2>
-              <p className="text-xs text-cyber-muted">Sensitivity, Crosshair Studio, Video & Audio Engine</p>
+              <h2 className="text-2xl font-black text-white uppercase tracking-tight">Esports Settings Studio</h2>
+              <span className="text-[10px] text-cyber-muted uppercase tracking-widest font-bold">
+                1:1 Sensitivity Conversion • Crosshair Studio • PBR Visuals
+              </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-cyber-muted hover:text-white p-2 rounded-xl bg-cyber-card border border-cyber-border hover:bg-cyber-border transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={resetToDefaults}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyber-card hover:bg-cyber-border text-cyber-muted hover:text-white text-xs font-bold transition-all border border-cyber-border"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset All
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl bg-cyber-card hover:bg-cyber-danger/20 text-cyber-muted hover:text-cyber-danger transition-all border border-cyber-border"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-2 mt-6 border-b border-cyber-border/80 pb-4 shrink-0 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('controls')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'controls'
-                ? 'bg-cyber-primary text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]'
-                : 'bg-cyber-card text-cyber-muted hover:text-white border border-cyber-border'
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            Sensitivity & Controls
-          </button>
-
-          <button
-            onClick={() => setActiveTab('crosshair')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'crosshair'
-                ? 'bg-cyber-primary text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]'
-                : 'bg-cyber-card text-cyber-muted hover:text-white border border-cyber-border'
-            }`}
-          >
-            <Crosshair className="w-4 h-4" />
-            Crosshair Studio
-          </button>
-
-          <button
-            onClick={() => setActiveTab('video')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'video'
-                ? 'bg-cyber-primary text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]'
-                : 'bg-cyber-card text-cyber-muted hover:text-white border border-cyber-border'
-            }`}
-          >
-            <Monitor className="w-4 h-4" />
-            Video & Graphics
-          </button>
-
-          <button
-            onClick={() => setActiveTab('audio')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'audio'
-                ? 'bg-cyber-primary text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]'
-                : 'bg-cyber-card text-cyber-muted hover:text-white border border-cyber-border'
-            }`}
-          >
-            <Volume2 className="w-4 h-4" />
-            Web Audio Engine
-          </button>
+        {/* Tab Buttons */}
+        <div className="grid grid-cols-4 gap-2 bg-cyber-card/80 p-1.5 rounded-2xl border border-cyber-border">
+          {[
+            { id: 'controls', label: 'Controls & Sens', icon: Sliders },
+            { id: 'crosshair', label: 'Crosshair Studio', icon: Crosshair },
+            { id: 'video', label: 'Graphics & Arena', icon: Monitor },
+            { id: 'audio', label: 'Audio Synthesizer', icon: Volume2 }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isSelected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as TabType)}
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                  isSelected
+                    ? 'bg-cyber-primary text-black shadow-lg shadow-cyber-primary/25'
+                    : 'text-cyber-muted hover:text-white hover:bg-cyber-border/40'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Tab Content Body */}
-        <div className="flex-1 overflow-y-auto py-6 pr-2 space-y-6">
-          {/* 1. CONTROLS & SENSITIVITY TAB */}
-          {activeTab === 'controls' && (
-            <div className="space-y-6">
-              {/* Game Profile Preset */}
-              <div>
-                <label className="block text-xs font-bold text-cyber-muted uppercase tracking-wider mb-2">
+        {/* Tab 1: CONTROLS & SENSITIVITY */}
+        {activeTab === 'controls' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Game Preset */}
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border space-y-3">
+                <label className="text-xs font-bold text-cyber-muted uppercase tracking-wider block">
                   Game Sensitivity Profile
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <select
+                  value={settings.controls.gamePreset}
+                  onChange={e => updateGamePreset(e.target.value as GameSensPreset)}
+                  className="w-full bg-cyber-bg border border-cyber-border rounded-xl px-4 py-3 text-white font-bold text-sm focus:outline-none focus:border-cyber-primary"
+                >
                   {gamePresets.map(preset => (
-                    <button
-                      key={preset}
-                      onClick={() => updateGamePreset(preset)}
-                      className={`px-4 py-3 rounded-xl text-xs font-bold text-left border transition-all ${
-                        settings.controls.gamePreset === preset
-                          ? 'border-cyber-primary bg-cyber-primary/10 text-cyber-primary shadow-[0_0_10px_rgba(0,240,255,0.2)]'
-                          : 'border-cyber-border bg-cyber-card text-cyber-muted hover:text-white'
-                      }`}
-                    >
+                    <option key={preset} value={preset} className="bg-[#0b0f19] text-white">
                       {preset}
-                    </button>
+                    </option>
                   ))}
-                </div>
+                </select>
+                <span className="text-[11px] text-cyber-muted block">
+                  Converts yaw radians 1:1 to match in-game rotations.
+                </span>
               </div>
 
-              {/* Sens Slider & Value Box */}
-              <div className="bg-cyber-card/60 p-6 rounded-2xl border border-cyber-border space-y-4">
+              {/* In-Game Sensitivity */}
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
-                    {settings.controls.gamePreset} In-Game Sensitivity
+                  <label className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
+                    In-Game Sensitivity
+                  </label>
+                  <span className="font-mono text-lg font-black text-cyber-primary">
+                    {settings.controls.inGameSens.toFixed(3)}
                   </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    max="10"
-                    value={settings.controls.inGameSens}
-                    onChange={e => updateSens(parseFloat(e.target.value) || 0.1)}
-                    className="w-24 bg-cyber-card border border-cyber-border rounded-xl px-3 py-1.5 text-right font-mono font-black text-cyber-primary outline-none focus:border-cyber-primary"
-                  />
                 </div>
                 <input
                   type="range"
                   min="0.01"
-                  max="3.0"
-                  step="0.01"
+                  max="3.5"
+                  step="0.005"
                   value={settings.controls.inGameSens}
                   onChange={e => updateSens(parseFloat(e.target.value))}
                   className="w-full h-2 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
                 />
-
-                {/* DPI Setting */}
-                <div className="flex items-center justify-between pt-4 border-t border-cyber-border/60">
-                  <span className="text-xs font-bold text-cyber-muted uppercase tracking-wider">Mouse DPI</span>
-                  <div className="flex items-center gap-2">
-                    {[400, 800, 1600, 3200].map(d => (
-                      <button
-                        key={d}
-                        onClick={() => updateDpi(d)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                          settings.controls.dpi === d
-                            ? 'bg-cyber-primary text-black border-cyber-primary'
-                            : 'bg-cyber-card text-cyber-muted border-cyber-border hover:text-white'
-                        }`}
-                      >
-                        {d}
-                      </button>
-                    ))}
-                    <input
-                      type="number"
-                      value={settings.controls.dpi}
-                      onChange={e => updateDpi(parseInt(e.target.value) || 800)}
-                      className="w-20 bg-cyber-card border border-cyber-border rounded-xl px-2 py-1 text-center font-mono text-xs font-bold text-white outline-none focus:border-cyber-primary"
-                    />
-                  </div>
+                <div className="flex items-center justify-between text-xs text-cyber-muted">
+                  <span>0.01 (Slow)</span>
+                  <span>3.50 (Ultra Fast)</span>
                 </div>
               </div>
 
-              {/* Calculated Physical Metrics (cm/360 & eDPI) */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-cyber-card/40 p-4 rounded-2xl border border-cyber-border">
-                  <span className="text-xs font-bold text-cyber-muted uppercase">Physical Distance (cm/360)</span>
-                  <span className="font-mono text-2xl font-black text-cyber-neon mt-1 block">
-                    {cm360} cm
-                  </span>
-                  <span className="text-[11px] text-cyber-muted">360 degree mousepad sweep</span>
-                </div>
-                <div className="bg-cyber-card/40 p-4 rounded-2xl border border-cyber-border">
-                  <span className="text-xs font-bold text-cyber-muted uppercase">Effective DPI (eDPI)</span>
-                  <span className="font-mono text-2xl font-black text-cyber-primary mt-1 block">
-                    {edpi}
-                  </span>
-                  <span className="text-[11px] text-cyber-muted">In-game Sens × Mouse DPI</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 2. CROSSHAIR STUDIO TAB */}
-          {activeTab === 'crosshair' && (
-            <div className="space-y-6">
-              {/* Live Preview Box */}
-              <div className="w-full h-44 bg-cyber-bg rounded-2xl border border-cyber-border flex flex-col items-center justify-center relative overflow-hidden">
-                {/* Background Cross Grid */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
-                  <div className="w-full h-[1px] bg-cyber-primary" />
-                  <div className="h-full w-[1px] bg-cyber-primary absolute" />
-                </div>
-
-                {/* Render Custom Crosshair Preview */}
-                <div className="relative flex items-center justify-center scale-150">
-                  {settings.crosshair.dot && (
-                    <div
-                      className="absolute rounded-full"
-                      style={{
-                        width: `${settings.crosshair.dotSize * 2}px`,
-                        height: `${settings.crosshair.dotSize * 2}px`,
-                        backgroundColor: settings.crosshair.color,
-                        boxShadow: settings.crosshair.outline
-                          ? `0 0 0 ${settings.crosshair.outlineThickness}px ${settings.crosshair.outlineColor}`
-                          : undefined
-                      }}
-                    />
-                  )}
-                  {settings.crosshair.style === 'cross' && (
-                    <>
-                      <div
-                        className="absolute"
-                        style={{
-                          width: `${settings.crosshair.thickness}px`,
-                          height: `${settings.crosshair.size}px`,
-                          bottom: `${settings.crosshair.gap}px`,
-                          backgroundColor: settings.crosshair.color
-                        }}
-                      />
-                      <div
-                        className="absolute"
-                        style={{
-                          width: `${settings.crosshair.thickness}px`,
-                          height: `${settings.crosshair.size}px`,
-                          top: `${settings.crosshair.gap}px`,
-                          backgroundColor: settings.crosshair.color
-                        }}
-                      />
-                      <div
-                        className="absolute"
-                        style={{
-                          width: `${settings.crosshair.size}px`,
-                          height: `${settings.crosshair.thickness}px`,
-                          right: `${settings.crosshair.gap}px`,
-                          backgroundColor: settings.crosshair.color
-                        }}
-                      />
-                      <div
-                        className="absolute"
-                        style={{
-                          width: `${settings.crosshair.size}px`,
-                          height: `${settings.crosshair.thickness}px`,
-                          left: `${settings.crosshair.gap}px`,
-                          backgroundColor: settings.crosshair.color
-                        }}
-                      />
-                    </>
-                  )}
-                </div>
-
-                <span className="absolute bottom-3 text-[11px] font-bold text-cyber-muted uppercase tracking-widest">
-                  Live Studio Preview
-                </span>
-              </div>
-
-              {/* Crosshair Controls Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Style */}
-                <div>
-                  <label className="block text-xs font-bold text-cyber-muted uppercase tracking-wider mb-2">
-                    Crosshair Style
+              {/* Mouse Hardware DPI */}
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
+                    Mouse Hardware DPI
                   </label>
-                  <select
-                    value={settings.crosshair.style}
-                    onChange={e => updateCrosshair({ style: e.target.value as any })}
-                    className="w-full bg-cyber-card border border-cyber-border rounded-xl px-4 py-2.5 text-white font-medium focus:border-cyber-primary outline-none"
-                  >
-                    <option value="cross">Classic Cross</option>
-                    <option value="dot">Center Dot Only</option>
-                    <option value="circle">Hollow Circle</option>
-                    <option value="t-shape">T-Shape Tactical</option>
-                    <option value="box">Hollow Box</option>
-                  </select>
+                  <span className="font-mono text-base font-black text-white">
+                    {settings.controls.dpi} DPI
+                  </span>
                 </div>
-
-                {/* Color */}
-                <div>
-                  <label className="block text-xs font-bold text-cyber-muted uppercase tracking-wider mb-2">
-                    Reticle Color
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.crosshair.color}
-                      onChange={e => updateCrosshair({ color: e.target.value })}
-                      className="w-10 h-10 rounded-xl bg-transparent border-0 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={settings.crosshair.color}
-                      onChange={e => updateCrosshair({ color: e.target.value })}
-                      className="w-full bg-cyber-card border border-cyber-border rounded-xl px-3 py-2 text-white font-mono text-xs uppercase outline-none focus:border-cyber-primary"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Sliders: Size, Thickness, Gap */}
-              <div className="grid grid-cols-3 gap-4 bg-cyber-card/40 p-4 rounded-2xl border border-cyber-border">
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-cyber-muted mb-2">
-                    <span>Length</span>
-                    <span className="text-cyber-primary font-mono">{settings.crosshair.size}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="2"
-                    max="20"
-                    step="1"
-                    value={settings.crosshair.size}
-                    onChange={e => updateCrosshair({ size: parseInt(e.target.value) })}
-                    className="w-full h-1.5 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-cyber-muted mb-2">
-                    <span>Thickness</span>
-                    <span className="text-cyber-primary font-mono">{settings.crosshair.thickness}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="8"
-                    step="1"
-                    value={settings.crosshair.thickness}
-                    onChange={e => updateCrosshair({ thickness: parseInt(e.target.value) })}
-                    className="w-full h-1.5 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-cyber-muted mb-2">
-                    <span>Center Gap</span>
-                    <span className="text-cyber-primary font-mono">{settings.crosshair.gap}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="20"
-                    step="1"
-                    value={settings.crosshair.gap}
-                    onChange={e => updateCrosshair({ gap: parseInt(e.target.value) })}
-                    className="w-full h-1.5 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 3. VIDEO & GRAPHICS TAB */}
-          {activeTab === 'video' && (
-            <div className="space-y-6">
-              {/* Arena Theme */}
-              <div>
-                <label className="block text-xs font-bold text-cyber-muted uppercase tracking-wider mb-2">
-                  3D Arena Theme
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  {[
-                    { id: 'cyber', name: 'Cyber Neon' },
-                    { id: 'studio', name: 'Clean Studio' },
-                    { id: 'tactical', name: 'Tactical Gray' },
-                    { id: 'synthwave', name: 'Synthwave' },
-                    { id: 'dark', name: 'Dark Void' }
-                  ].map(theme => (
+                <div className="grid grid-cols-4 gap-2">
+                  {[400, 800, 1600, 3200].map(dpi => (
                     <button
-                      key={theme.id}
-                      onClick={() => updateVideo({ arenaTheme: theme.id as any })}
-                      className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${
-                        settings.video.arenaTheme === theme.id
-                          ? 'border-cyber-primary bg-cyber-primary/10 text-cyber-primary shadow-[0_0_10px_rgba(0,240,255,0.2)]'
-                          : 'border-cyber-border bg-cyber-card text-cyber-muted hover:text-white'
+                      key={dpi}
+                      onClick={() => updateDpi(dpi)}
+                      className={`py-2 rounded-xl text-xs font-mono font-bold transition-all ${
+                        settings.controls.dpi === dpi
+                          ? 'bg-cyber-primary text-black font-black shadow-md'
+                          : 'bg-cyber-bg text-cyber-muted hover:text-white border border-cyber-border'
                       }`}
                     >
-                      {theme.name}
+                      {dpi}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* FOV Slider */}
-              <div className="bg-cyber-card/60 p-6 rounded-2xl border border-cyber-border space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
-                    Field of View (FOV)
+              {/* Calculated Physical Distance (cm/360) */}
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border flex flex-col justify-between">
+                <span className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
+                  Physical 360° Turn Distance
+                </span>
+                <div className="my-2">
+                  <span className="font-mono text-4xl font-black text-cyber-neon drop-shadow-[0_0_15px_rgba(0,255,102,0.4)]">
+                    {cm360} <span className="text-lg text-cyber-muted">cm / 360°</span>
                   </span>
-                  <span className="font-mono text-xl font-black text-cyber-primary">
+                </div>
+                <span className="text-xs text-cyber-muted font-mono">
+                  Effective DPI (eDPI): <strong className="text-white">{edpi}</strong>
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: CROSSHAIR STUDIO */}
+        {activeTab === 'crosshair' && (
+          <div className="space-y-6">
+            {/* Live Crosshair Preview Stage */}
+            <div className="relative w-full h-44 rounded-2xl bg-[#080c14] border border-cyber-border flex items-center justify-center overflow-hidden shadow-inner">
+              <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+                <div className="w-24 h-24 rounded-full border border-cyber-primary" />
+                <div className="w-48 h-48 rounded-full border border-cyber-border" />
+              </div>
+              <CrosshairRenderer />
+              <div className="absolute bottom-3 right-3 text-[10px] font-mono text-cyber-muted uppercase tracking-widest bg-cyber-card/80 px-2 py-1 rounded-md border border-cyber-border">
+                Live Reticle Preview
+              </div>
+            </div>
+
+            {/* Pro Presets Picker */}
+            <div className="space-y-2">
+              <span className="text-xs font-black uppercase text-cyber-muted tracking-wider block">
+                Pro Esports Crosshair Presets
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                {PRO_CROSSHAIRS.map(preset => (
+                  <button
+                    key={preset.name}
+                    onClick={() => updateCrosshair(preset.settings)}
+                    className="p-3 rounded-xl bg-cyber-card/70 hover:bg-cyber-border text-left border border-cyber-border transition-all hover:border-cyber-primary group"
+                  >
+                    <span className="text-[10px] font-bold text-cyber-primary uppercase block">
+                      {preset.game}
+                    </span>
+                    <span className="text-xs font-black text-white group-hover:text-cyber-primary transition-colors block truncate">
+                      {preset.player}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Import / Export Codes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-2 bg-cyber-card/60 p-3 rounded-2xl border border-cyber-border">
+                <input
+                  type="text"
+                  placeholder="Paste Valorant or AIMPRO crosshair code..."
+                  value={importInput}
+                  onChange={e => setImportInput(e.target.value)}
+                  className="flex-1 bg-cyber-bg border border-cyber-border rounded-xl px-3 py-2 text-xs text-white placeholder-cyber-muted focus:outline-none focus:border-cyber-primary font-mono"
+                />
+                <button
+                  onClick={handleImportCode}
+                  className="px-4 py-2 rounded-xl bg-cyber-primary text-black text-xs font-black uppercase tracking-wider hover:bg-cyber-primary/90 transition-all"
+                >
+                  Import
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between bg-cyber-card/60 p-3 rounded-2xl border border-cyber-border">
+                <span className="text-xs font-bold text-cyber-muted uppercase pl-2">
+                  Share Your Reticle Code
+                </span>
+                <button
+                  onClick={handleExportCode}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyber-border hover:bg-cyber-primary hover:text-black text-white text-xs font-black uppercase tracking-wider transition-all"
+                >
+                  {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copiedCode ? 'Copied!' : 'Copy Code'}
+                </button>
+              </div>
+            </div>
+            {importStatus && (
+              <span className="text-xs text-cyber-neon font-bold block text-center animate-pulse">
+                {importStatus}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: VIDEO & GRAPHICS */}
+        {activeTab === 'video' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Field of View (FOV) */}
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
+                    Horizontal FOV
+                  </label>
+                  <span className="font-mono text-lg font-black text-cyber-primary">
                     {settings.video.fov}°
                   </span>
                 </div>
                 <input
                   type="range"
-                  min="70"
-                  max="130"
+                  min="80"
+                  max="120"
                   step="1"
                   value={settings.video.fov}
                   onChange={e => updateVideo({ fov: parseInt(e.target.value) })}
                   className="w-full h-2 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
                 />
-                <div className="flex items-center gap-3 text-xs text-cyber-muted">
-                  <button onClick={() => updateVideo({ fov: 103 })} className="hover:text-white underline">
-                    Valorant (103°)
-                  </button>
-                  <span>•</span>
-                  <button onClick={() => updateVideo({ fov: 90 })} className="hover:text-white underline">
-                    CS2 (90°)
-                  </button>
-                  <span>•</span>
-                  <button onClick={() => updateVideo({ fov: 110 })} className="hover:text-white underline">
-                    Apex (110°)
-                  </button>
-                </div>
+                <span className="text-[11px] text-cyber-muted block">
+                  103° matches default Valorant & Overwatch 1:1 view.
+                </span>
               </div>
 
-              {/* Target Colors */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-cyber-muted uppercase tracking-wider mb-2">
-                    Target Primary Color
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.video.targetColor}
-                      onChange={e => updateVideo({ targetColor: e.target.value })}
-                      className="w-10 h-10 rounded-xl bg-transparent border-0 cursor-pointer"
+              {/* Target Color Palette */}
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border space-y-3">
+                <label className="text-xs font-bold text-cyber-muted uppercase tracking-wider block">
+                  Target Accent Color
+                </label>
+                <div className="flex items-center gap-3">
+                  {['#00f0ff', '#ff0055', '#ffdd00', '#00ff66', '#a855f7', '#ffffff'].map(color => (
+                    <button
+                      key={color}
+                      onClick={() => updateVideo({ targetColor: color })}
+                      className="w-9 h-9 rounded-xl border-2 transition-all hover:scale-110 shadow-md"
+                      style={{
+                        backgroundColor: color,
+                        borderColor: settings.video.targetColor === color ? '#ffffff' : 'transparent'
+                      }}
                     />
-                    <input
-                      type="text"
-                      value={settings.video.targetColor}
-                      onChange={e => updateVideo({ targetColor: e.target.value })}
-                      className="w-full bg-cyber-card border border-cyber-border rounded-xl px-3 py-2 text-white font-mono text-xs uppercase outline-none focus:border-cyber-primary"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-cyber-muted uppercase tracking-wider mb-2">
-                    Target Hit Flash Color
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.video.targetHitColor}
-                      onChange={e => updateVideo({ targetHitColor: e.target.value })}
-                      className="w-10 h-10 rounded-xl bg-transparent border-0 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={settings.video.targetHitColor}
-                      onChange={e => updateVideo({ targetHitColor: e.target.value })}
-                      className="w-full bg-cyber-card border border-cyber-border rounded-xl px-3 py-2 text-white font-mono text-xs uppercase outline-none focus:border-cyber-primary"
-                    />
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* 4. WEB AUDIO TAB */}
-          {activeTab === 'audio' && (
-            <div className="space-y-6">
+        {/* Tab 4: AUDIO SYNTHESIZER */}
+        {activeTab === 'audio' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Hit Sound Preset */}
-              <div>
-                <label className="block text-xs font-bold text-cyber-muted uppercase tracking-wider mb-2">
-                  Hit Sound Timbre
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border space-y-3">
+                <label className="text-xs font-bold text-cyber-muted uppercase tracking-wider block">
+                  Hit Sound Synthesizer Timbre
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'aimlab_crystal', name: 'AimLab Crystal' },
-                    { id: 'kovaak_bell', name: 'KovaaK Bell' },
-                    { id: 'quake_ding', name: 'Quake Ding' },
-                    { id: 'cyber_plink', name: 'Cyber Plink' }
-                  ].map(p => (
+                    { id: 'aimlab_crystal', label: 'Crystal Chime' },
+                    { id: 'kovaak_bell', label: 'Metallic Bell' },
+                    { id: 'quake_ding', label: 'Quake Ding' },
+                    { id: 'cyber_plink', label: 'Cyber Plink' }
+                  ].map(preset => (
                     <button
-                      key={p.id}
+                      key={preset.id}
                       onClick={() => {
-                        updateAudio({ hitSoundPreset: p.id as any });
-                        soundEngine.preset = p.id as any;
+                        updateAudio({ hitSoundPreset: preset.id as any });
+                        soundEngine.preset = preset.id as any;
                         soundEngine.playHitSound(0, false);
                       }}
-                      className={`px-4 py-3 rounded-xl text-xs font-bold text-left border transition-all ${
-                        settings.audio.hitSoundPreset === p.id
-                          ? 'border-cyber-primary bg-cyber-primary/10 text-cyber-primary shadow-[0_0_10px_rgba(0,240,255,0.2)]'
-                          : 'border-cyber-border bg-cyber-card text-cyber-muted hover:text-white'
+                      className={`py-3 px-3 rounded-xl text-xs font-bold transition-all text-left flex items-center justify-between ${
+                        settings.audio.hitSoundPreset === preset.id
+                          ? 'bg-cyber-primary text-black font-black shadow-md'
+                          : 'bg-cyber-bg text-cyber-muted hover:text-white border border-cyber-border'
                       }`}
                     >
-                      {p.name}
+                      <span>{preset.label}</span>
+                      <Play className="w-3.5 h-3.5 fill-current" />
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Hit Frequency Slider + Test Button */}
-              <div className="bg-cyber-card/60 p-6 rounded-2xl border border-cyber-border space-y-4">
+              {/* Base Frequency Pitch Slider */}
+              <div className="bg-cyber-card/60 p-5 rounded-2xl border border-cyber-border space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
-                    Hit Sound Frequency
+                  <label className="text-xs font-bold text-cyber-muted uppercase tracking-wider">
+                    Base Hit Pitch Frequency
+                  </label>
+                  <span className="font-mono text-base font-black text-cyber-primary">
+                    {settings.audio.hitSoundFrequency} Hz
                   </span>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm font-black text-cyber-primary">
-                      {settings.audio.hitSoundFrequency} Hz
-                    </span>
-                    <button
-                      onClick={() => soundEngine.playHitSound(0, false)}
-                      className="flex items-center gap-1.5 bg-cyber-primary text-black px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-md hover:shadow-[0_0_10px_rgba(0,240,255,0.4)]"
-                    >
-                      <Play className="w-3 h-3 fill-current" />
-                      Test
-                    </button>
-                  </div>
                 </div>
                 <input
                   type="range"
@@ -558,66 +417,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
                   max="1600"
                   step="20"
                   value={settings.audio.hitSoundFrequency}
-                  onChange={e => updateAudio({ hitSoundFrequency: parseInt(e.target.value) })}
+                  onChange={e => {
+                    const f = parseInt(e.target.value);
+                    updateAudio({ hitSoundFrequency: f });
+                    soundEngine.baseHitFrequency = f;
+                    soundEngine.playHitSound(0, false);
+                  }}
                   className="w-full h-2 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
                 />
-              </div>
-
-              {/* Volume Sliders Grid */}
-              <div className="grid grid-cols-2 gap-4 bg-cyber-card/40 p-4 rounded-2xl border border-cyber-border">
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-cyber-muted mb-2">
-                    <span>Master Volume</span>
-                    <span className="text-cyber-primary font-mono">{Math.round(settings.audio.masterVolume * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={settings.audio.masterVolume}
-                    onChange={e => updateAudio({ masterVolume: parseFloat(e.target.value) })}
-                    className="w-full h-1.5 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-cyber-muted mb-2">
-                    <span>Hit Ping Volume</span>
-                    <span className="text-cyber-primary font-mono">{Math.round(settings.audio.hitVolume * 100)}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={settings.audio.hitVolume}
-                    onChange={e => updateAudio({ hitVolume: parseFloat(e.target.value) })}
-                    className="w-full h-1.5 bg-cyber-border rounded-lg appearance-none cursor-pointer accent-cyber-primary"
-                  />
-                </div>
+                <span className="text-[11px] text-cyber-muted block">
+                  Adjust from deep thumps (400Hz) to razor-sharp crystal pings (1600Hz).
+                </span>
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="pt-6 border-t border-cyber-border flex items-center justify-between shrink-0">
-          <button
-            onClick={resetToDefaults}
-            className="flex items-center gap-2 text-xs font-bold text-cyber-muted hover:text-cyber-danger transition-colors"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Reset to Defaults
-          </button>
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 bg-cyber-primary hover:bg-cyber-primary/90 text-black px-8 py-3 rounded-xl font-black uppercase tracking-wider transition-all shadow-lg hover:shadow-[0_0_20px_rgba(0,240,255,0.6)]"
-          >
-            <Check className="w-4 h-4" />
-            Save & Close
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
