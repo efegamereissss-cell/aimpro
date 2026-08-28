@@ -15,50 +15,51 @@ export const FPSScene: React.FC = () => {
   const effectiveFov = getEffectiveVerticalFov(videoSettings.fov);
 
   return (
-    <div className="w-full h-full relative cursor-none select-none bg-[#05070d]">
+    <div className="w-full h-full relative cursor-none select-none bg-[#0a0d14]">
       <Canvas
         camera={{
           fov: effectiveFov,
           near: 0.05,
-          far: 120,
+          far: 100,
           position: [0, 1.7, 0]
         }}
-        dpr={[1, 2]} // High-DPI Retina resolution for zero pixelation
+        dpr={[1, 2]} // Crisp retina DPR without pixelation
         shadows={{
-          type: THREE.PCFSoftShadowMap // Ultra-smooth soft shadows with zero pixelation
+          type: THREE.PCFSoftShadowMap // Smooth soft shadows
         }}
         gl={{
-          antialias: true, // Hardware Anti-Aliasing (FXAA/MSAA)
+          antialias: true,
           alpha: false,
           powerPreference: 'high-performance',
-          toneMapping: THREE.ACESFilmicToneMapping, // Film-grade color grading
-          toneMappingExposure: 1.12
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.18
         }}
       >
-        {/* Cinematic Lighting Setup */}
-        <ambientLight intensity={0.55} />
-        
-        {/* Key Overhead Directional Sun Light */}
+        {/* CS2 Dust 2 Natural Sky Ambient Radiance */}
+        <ambientLight intensity={0.75} color="#fff6eb" />
+
+        {/* Dust 2 Warm Overhead Sun Directional Light */}
         <directionalLight
-          position={[12, 22, 10]}
-          intensity={1.3}
+          position={[14, 24, 12]}
+          intensity={1.65}
+          color="#fff8ed"
           castShadow={videoSettings.shadows}
-          shadow-mapSize-width={4096} // Ultra 4K Shadow Map for razor-sharp edges
-          shadow-mapSize-height={4096}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
           shadow-camera-near={0.5}
           shadow-camera-far={60}
-          shadow-camera-left={-25}
-          shadow-camera-right={25}
-          shadow-camera-top={25}
-          shadow-camera-bottom={-25}
+          shadow-camera-left={-24}
+          shadow-camera-right={24}
+          shadow-camera-top={24}
+          shadow-camera-bottom={-24}
           shadow-bias={-0.0001}
         />
 
-        {/* Soft Fill Light from Opposite Angle */}
+        {/* Soft Mediterranean Sky Fill Light */}
         <directionalLight
-          position={[-15, 12, -8]}
-          intensity={0.4}
-          color="#38bdf8"
+          position={[-14, 14, -8]}
+          intensity={0.45}
+          color="#a3c4f3"
         />
 
         <Suspense fallback={null}>

@@ -1,359 +1,238 @@
-import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
-import { useSettingsStore } from '../../store/useSettingsStore';
 
-// Procedural Canvas Texture Generator for High-End Carbon Fiber / Titanium Studio Panels
-function createProceduralStudioTexture(type: 'carbon' | 'wall' | 'floor'): THREE.CanvasTexture {
+// Ultra-Optimized Procedural PBR Canvas Textures for CS2 Dust 2 Sandstone Architecture
+function generateDust2Texture(type: 'sandstone_wall' | 'sandstone_floor' | 'crate_wood'): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
 
-  if (type === 'carbon') {
-    ctx.fillStyle = '#0a0d14';
+  if (type === 'sandstone_floor') {
+    // Warm Mediterranean sandstone floor pavers
+    ctx.fillStyle = '#caba9e';
     ctx.fillRect(0, 0, 512, 512);
 
-    ctx.fillStyle = '#131926';
-    const size = 16;
-    for (let y = 0; y < 512; y += size) {
-      for (let x = 0; x < 512; x += size) {
-        if ((x / size + y / size) % 2 === 0) {
-          ctx.fillRect(x, y, size, size);
-        }
-      }
+    // Subtle grain texture
+    ctx.fillStyle = '#bda98c';
+    for (let i = 0; i < 4000; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      ctx.fillRect(x, y, 2, 2);
     }
-  } else if (type === 'floor') {
-    ctx.fillStyle = '#06080e';
-    ctx.fillRect(0, 0, 512, 512);
 
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, 512, 512);
-  } else {
-    ctx.fillStyle = '#080a11';
-    ctx.fillRect(0, 0, 512, 512);
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 512; i += 6) {
+    // Sandstone tile mortar seams
+    ctx.strokeStyle = '#9c876c';
+    ctx.lineWidth = 3;
+    const tileSize = 128;
+    for (let x = 0; x < 512; x += tileSize) {
       ctx.beginPath();
-      ctx.moveTo(0, i);
-      ctx.lineTo(512, i);
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, 512);
       ctx.stroke();
     }
+    for (let y = 0; y < 512; y += tileSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(512, y);
+      ctx.stroke();
+    }
+  } else if (type === 'sandstone_wall') {
+    // Clean, flat, smooth Dust 2 plaster/sandstone wall
+    ctx.fillStyle = '#d4c5a9';
+    ctx.fillRect(0, 0, 512, 512);
+
+    // Fine smooth plaster grain
+    ctx.fillStyle = '#cbba9d';
+    for (let i = 0; i < 3000; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      ctx.fillRect(x, y, 2, 2);
+    }
+
+    // Subtle architectural horizontal mortar line
+    ctx.strokeStyle = 'rgba(156, 135, 108, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 256);
+    ctx.lineTo(512, 256);
+    ctx.stroke();
+  } else {
+    // Military supply wooden crate texture
+    ctx.fillStyle = '#8d6841';
+    ctx.fillRect(0, 0, 512, 512);
+
+    ctx.fillStyle = '#7a5732';
+    for (let i = 0; i < 1500; i++) {
+      ctx.fillRect(Math.random() * 512, Math.random() * 512, 3, 3);
+    }
+
+    ctx.strokeStyle = '#543b20';
+    ctx.lineWidth = 14;
+    ctx.strokeRect(0, 0, 512, 512);
+    // Diagonal brace
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(512, 512);
+    ctx.stroke();
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(type === 'floor' ? 24 : 12, type === 'floor' ? 24 : 12);
-  texture.anisotropy = 16;
+  texture.repeat.set(type === 'sandstone_floor' ? 12 : 6, type === 'sandstone_floor' ? 12 : 6);
+  texture.anisotropy = 8;
   return texture;
 }
 
+// Singletons to prevent any memory re-allocation on re-renders
+const floorTex = generateDust2Texture('sandstone_floor');
+const wallTex = generateDust2Texture('sandstone_wall');
+const crateTex = generateDust2Texture('crate_wood');
+
 export const Arena: React.FC = () => {
-  const arenaTheme = useSettingsStore(state => state.settings.video.arenaTheme);
-
-  // Motorized component refs
-  const scanlineRef = useRef<THREE.Mesh>(null);
-  const gantryRef = useRef<THREE.Group>(null);
-  const gyroGroupRef = useRef<THREE.Group>(null);
-  const hexPanelsGroupRef = useRef<THREE.Group>(null);
-
-  const textures = useMemo(() => ({
-    floor: createProceduralStudioTexture('floor'),
-    carbon: createProceduralStudioTexture('carbon'),
-    wall: createProceduralStudioTexture('wall')
-  }), []);
-
-  const themeConfig = useMemo(() => {
-    switch (arenaTheme) {
-      case 'studio':
-        return {
-          floorColor: '#141822',
-          wallColor: '#0e111a',
-          pillarColor: '#1a202c',
-          accent: '#00f0ff',
-          neonSecondary: '#7928ca',
-          fogColor: '#090c12',
-          metalness: 0.88,
-          roughness: 0.16
-        };
-      case 'tactical':
-        return {
-          floorColor: '#121214',
-          wallColor: '#0a0a0c',
-          pillarColor: '#18181c',
-          accent: '#ffb700',
-          neonSecondary: '#ff3366',
-          fogColor: '#070708',
-          metalness: 0.92,
-          roughness: 0.2
-        };
-      case 'synthwave':
-        return {
-          floorColor: '#16082e',
-          wallColor: '#0c021a',
-          pillarColor: '#220d48',
-          accent: '#00f0ff',
-          neonSecondary: '#ff007f',
-          fogColor: '#06010f',
-          metalness: 0.82,
-          roughness: 0.14
-        };
-      case 'dark':
-        return {
-          floorColor: '#08090c',
-          wallColor: '#030406',
-          pillarColor: '#0f1116',
-          accent: '#64748b',
-          neonSecondary: '#334155',
-          fogColor: '#020203',
-          metalness: 0.94,
-          roughness: 0.24
-        };
-      case 'cyber':
-      default:
-        return {
-          floorColor: '#070a14',
-          wallColor: '#05070e',
-          pillarColor: '#0f172a',
-          accent: '#00f0ff',
-          neonSecondary: '#ff007f',
-          fogColor: '#030408',
-          metalness: 0.9,
-          roughness: 0.15
-        };
-    }
-  }, [arenaTheme]);
-
-  // Frame animations for motorized machinery
-  useFrame((state, delta) => {
-    const t = state.clock.getElapsedTime();
-
-    // 1. Moving Laser Scanline sweeping down the back wall
-    if (scanlineRef.current) {
-      scanlineRef.current.position.y = 11 + Math.sin(t * 1.2) * 8.5;
-    }
-
-    // 2. Motorized Overhead Gantry Crane carriage moving along ceiling rails
-    if (gantryRef.current) {
-      gantryRef.current.position.x = Math.sin(t * 0.4) * 12.0;
-    }
-
-    // 3. Motorized Gyro containment reactors in 4 corners
-    if (gyroGroupRef.current) {
-      gyroGroupRef.current.children.forEach((pillar, idx) => {
-        const ring1 = pillar.getObjectByName('ring1');
-        const ring2 = pillar.getObjectByName('ring2');
-        const ring3 = pillar.getObjectByName('ring3');
-        if (ring1) ring1.rotation.y += delta * (1.5 + idx * 0.2);
-        if (ring2) ring2.rotation.x -= delta * (1.8 + idx * 0.2);
-        if (ring3) ring3.rotation.z += delta * (1.2 + idx * 0.2);
-      });
-    }
-
-    // 4. Hydraulic breathing backboard panels
-    if (hexPanelsGroupRef.current) {
-      hexPanelsGroupRef.current.children.forEach((panel, i) => {
-        const offset = Math.sin(t * 1.5 + i * 0.4) * 0.08;
-        panel.position.z = -15.8 + offset;
-      });
-    }
-  });
-
   return (
     <group>
-      {/* Volumetric Atmosphere Depth Fog */}
-      <fog attach="fog" args={[themeConfig.fogColor, 22, 70]} />
+      {/* Warm Mediterranean Dust 2 Sunlight Atmosphere */}
+      <fog attach="fog" args={['#e8dfcf', 28, 80]} />
 
-      {/* Main Ground Floor with Reflective PBR Texture */}
+      {/* Main Ground Floor - Smooth Sandstone Tile Arena */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[75, 75]} />
+        <planeGeometry args={[70, 70]} />
         <meshStandardMaterial
-          map={textures.floor}
-          color={themeConfig.floorColor}
-          roughness={themeConfig.roughness}
-          metalness={themeConfig.metalness}
+          map={floorTex}
+          color="#caba9e"
+          roughness={0.75}
+          metalness={0.05}
         />
       </mesh>
 
-      {/* Razor-Sharp Sub-Millimeter Ground Tactical Grid */}
+      {/* Subtle Distance Grid */}
       <gridHelper
-        args={[75, 75, themeConfig.accent, 'rgba(30, 41, 66, 0.45)']}
-        position={[0, 0.006, 0]}
+        args={[70, 35, 'rgba(156, 135, 108, 0.4)', 'rgba(156, 135, 108, 0.15)']}
+        position={[0, 0.005, 0]}
       />
 
-      {/* Front Target Wall (Carbon Composite Backboard) */}
+      {/* Front Target Wall (Clean, Smooth, Flat Sandstone Wall for 100% Target Visibility) */}
       <mesh position={[0, 11, -16]} receiveShadow>
         <planeGeometry args={[46, 24]} />
         <meshStandardMaterial
-          map={textures.carbon}
-          color={themeConfig.wallColor}
-          roughness={0.5}
-          metalness={0.6}
+          map={wallTex}
+          color="#dfd2b9"
+          roughness={0.7}
+          metalness={0.02}
         />
       </mesh>
 
-      {/* Front Wall Laser Hologram Grid */}
-      <group position={[0, 11, -15.94]}>
-        <gridHelper args={[46, 24, themeConfig.accent, 'rgba(30, 41, 66, 0.3)']} rotation={[Math.PI / 2, 0, 0]} />
-      </group>
-
-      {/* Motorized Hydraulic Acoustic Wall Panels Grid */}
-      <group ref={hexPanelsGroupRef}>
-        {[-14, -7, 0, 7, 14].map((px, idx) => (
-          <mesh key={idx} position={[px, 11, -15.8]} castShadow receiveShadow>
-            <boxGeometry args={[4.8, 14, 0.25]} />
-            <meshStandardMaterial
-              color={themeConfig.pillarColor}
-              roughness={0.25}
-              metalness={0.85}
-            />
-          </mesh>
-        ))}
-      </group>
-
-      {/* Motorized Vertical Laser Scanline Beam on Backboard */}
-      <mesh ref={scanlineRef} position={[0, 11, -15.75]}>
-        <boxGeometry args={[45, 0.06, 0.08]} />
-        <meshBasicMaterial color={themeConfig.accent} transparent opacity={0.8} />
+      {/* Top Wall Architectural Stone Cornice */}
+      <mesh position={[0, 22.8, -15.7]} castShadow receiveShadow>
+        <boxGeometry args={[46.2, 0.6, 0.8]} />
+        <meshStandardMaterial color="#bda98c" roughness={0.8} />
       </mesh>
 
-      {/* Motorized Overhead Gantry Crane System */}
-      <group position={[0, 21.2, -6]}>
-        {/* Steel Cross Rails */}
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[45, 0.4, 0.6]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.9} />
-        </mesh>
-        {/* Moving Carriage Trolley */}
-        <group ref={gantryRef} position={[0, -0.3, 0]}>
-          <mesh castShadow>
-            <boxGeometry args={[2.5, 0.6, 1.2]} />
-            <meshStandardMaterial color="#1e293b" roughness={0.2} metalness={0.95} />
-          </mesh>
-          {/* Warning Flashing Beacon */}
-          <pointLight position={[0, -0.4, 0]} color="#ffb700" intensity={2.0} distance={12} />
-          <mesh position={[0, -0.4, 0]}>
-            <sphereGeometry args={[0.12, 16, 16]} />
-            <meshBasicMaterial color="#ffb700" />
-          </mesh>
-        </group>
-      </group>
+      {/* Wall Bottom Kickboard Trim */}
+      <mesh position={[0, 0.25, -15.8]} castShadow receiveShadow>
+        <boxGeometry args={[46.2, 0.5, 0.4]} />
+        <meshStandardMaterial color="#a89578" roughness={0.8} />
+      </mesh>
 
-      {/* Left Wall with Architectural Bevelled Panels */}
+      {/* Left Sandstone Wall */}
       <mesh position={[-23, 11, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[34, 24]} />
         <meshStandardMaterial
-          map={textures.wall}
-          color={themeConfig.wallColor}
-          roughness={0.6}
-          metalness={0.5}
+          map={wallTex}
+          color="#d4c5a9"
+          roughness={0.75}
+          metalness={0.02}
         />
       </mesh>
 
-      {/* Right Wall with Architectural Bevelled Panels */}
+      {/* Right Sandstone Wall */}
       <mesh position={[23, 11, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[34, 24]} />
         <meshStandardMaterial
-          map={textures.wall}
-          color={themeConfig.wallColor}
-          roughness={0.6}
-          metalness={0.5}
+          map={wallTex}
+          color="#d4c5a9"
+          roughness={0.75}
+          metalness={0.02}
         />
       </mesh>
 
-      {/* Back Wall (Behind Player) */}
+      {/* Back Wall */}
       <mesh position={[0, 11, 16]} rotation={[0, Math.PI, 0]} receiveShadow>
         <planeGeometry args={[46, 24]} />
         <meshStandardMaterial
-          map={textures.wall}
-          color={themeConfig.wallColor}
-          roughness={0.7}
-          metalness={0.4}
+          map={wallTex}
+          color="#d4c5a9"
+          roughness={0.8}
+          metalness={0.02}
         />
       </mesh>
 
-      {/* Ceiling Frame & Acoustic Dampeners */}
-      <mesh position={[0, 22, 0]} rotation={[Math.PI / 2, 0, 0]}>
+      {/* Open Sky Ceiling Frame (Warm Blue Moroccan Sky) */}
+      <mesh position={[0, 22.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[46, 34]} />
-        <meshStandardMaterial color={themeConfig.wallColor} roughness={0.9} />
+        <meshBasicMaterial color="#94b8e8" />
       </mesh>
 
-      {/* 4 Corner Motorized Gyro Plasma Reactor Pillars */}
-      <group ref={gyroGroupRef}>
-        {[
-          [-22.5, -15.5],
-          [22.5, -15.5],
-          [-22.5, 15.5],
-          [22.5, 15.5]
-        ].map(([x, z], i) => (
-          <group key={i} position={[x, 0, z]}>
-            {/* Base Pillar Column */}
-            <mesh position={[0, 11, 0]} castShadow receiveShadow>
-              <cylinderGeometry args={[0.55, 0.65, 22, 16]} />
-              <meshStandardMaterial color={themeConfig.pillarColor} roughness={0.2} metalness={0.88} />
-            </mesh>
-            {/* Spinning Gyro Ring 1 */}
-            <mesh name="ring1" position={[0, 5, 0]}>
-              <torusGeometry args={[1.1, 0.04, 16, 32]} />
-              <meshStandardMaterial color={themeConfig.accent} emissive={themeConfig.accent} emissiveIntensity={0.6} />
-            </mesh>
-            {/* Spinning Gyro Ring 2 */}
-            <mesh name="ring2" position={[0, 5, 0]}>
-              <torusGeometry args={[0.85, 0.035, 16, 32]} />
-              <meshStandardMaterial color={themeConfig.neonSecondary} emissive={themeConfig.neonSecondary} emissiveIntensity={0.6} />
-            </mesh>
-            {/* Spinning Gyro Ring 3 */}
-            <mesh name="ring3" position={[0, 5, 0]}>
-              <torusGeometry args={[0.6, 0.03, 16, 32]} />
-              <meshBasicMaterial color="#ffffff" />
-            </mesh>
-            {/* Inner Floating Plasma Core */}
-            <mesh position={[0, 5, 0]}>
-              <sphereGeometry args={[0.3, 16, 16]} />
-              <meshBasicMaterial color={themeConfig.accent} />
-            </mesh>
-            <pointLight position={[0, 5, 0]} color={themeConfig.accent} intensity={1.5} distance={10} />
-          </group>
-        ))}
+      {/* 4 Architectural Corner Sandstone Columns */}
+      {[
+        [-22.6, -15.6],
+        [22.6, -15.6],
+        [-22.6, 15.6],
+        [22.6, 15.6]
+      ].map(([x, z], i) => (
+        <mesh key={i} position={[x, 11, z]} castShadow receiveShadow>
+          <boxGeometry args={[1.2, 22, 1.2]} />
+          <meshStandardMaterial color="#c2b093" roughness={0.7} />
+        </mesh>
+      ))}
+
+      {/* CS2 Tactical Supply Crates (Corner Props for Authentic Dust 2 Feel) */}
+      {/* Left Stacked Wooden Crates */}
+      <group position={[-18, 0, -12]}>
+        {/* Bottom Crate 1 */}
+        <mesh position={[0, 1.0, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.0, 2.0, 2.0]} />
+          <meshStandardMaterial map={crateTex} roughness={0.8} />
+        </mesh>
+        {/* Bottom Crate 2 */}
+        <mesh position={[2.1, 1.0, 0.2]} rotation={[0, 0.15, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.0, 2.0, 2.0]} />
+          <meshStandardMaterial map={crateTex} roughness={0.8} />
+        </mesh>
+        {/* Top Crate */}
+        <mesh position={[0.8, 3.0, 0.1]} rotation={[0, -0.1, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.0, 2.0, 2.0]} />
+          <meshStandardMaterial map={crateTex} roughness={0.8} />
+        </mesh>
       </group>
 
-      {/* Ultra-Crisp Glowing Neon Runway Border Trims */}
-      <mesh position={[0, 0.05, -15.8]}>
-        <boxGeometry args={[46, 0.08, 0.12]} />
-        <meshBasicMaterial color={themeConfig.accent} />
-      </mesh>
-      <mesh position={[-22.8, 0.05, 0]}>
-        <boxGeometry args={[0.12, 0.08, 32]} />
-        <meshBasicMaterial color={themeConfig.accent} />
-      </mesh>
-      <mesh position={[22.8, 0.05, 0]}>
-        <boxGeometry args={[0.12, 0.08, 32]} />
-        <meshBasicMaterial color={themeConfig.accent} />
-      </mesh>
-      <mesh position={[0, 0.05, 15.8]}>
-        <boxGeometry args={[46, 0.08, 0.12]} />
-        <meshBasicMaterial color={themeConfig.neonSecondary} />
-      </mesh>
+      {/* Right Stacked Wooden Crates */}
+      <group position={[18, 0, -12]}>
+        <mesh position={[0, 1.0, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.0, 2.0, 2.0]} />
+          <meshStandardMaterial map={crateTex} roughness={0.8} />
+        </mesh>
+        <mesh position={[-2.1, 1.0, 0.2]} rotation={[0, -0.12, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.0, 2.0, 2.0]} />
+          <meshStandardMaterial map={crateTex} roughness={0.8} />
+        </mesh>
+        <mesh position={[-0.8, 3.0, 0.1]} rotation={[0, 0.08, 0]} castShadow receiveShadow>
+          <boxGeometry args={[2.0, 2.0, 2.0]} />
+          <meshStandardMaterial map={crateTex} roughness={0.8} />
+        </mesh>
+      </group>
 
-      {/* Distance Floor Markers (5m, 10m, 15m) */}
+      {/* Distance Floor Markings (5m, 10m, 15m) */}
       {[-5, -10, -14.5].map((z, idx) => (
         <group key={z} position={[0, 0.02, z]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[36, 0.05]} />
-            <meshBasicMaterial color={themeConfig.accent} transparent opacity={0.4} />
+            <planeGeometry args={[32, 0.06]} />
+            <meshBasicMaterial color="#b39d7f" transparent opacity={0.6} />
           </mesh>
         </group>
       ))}
-
-      {/* High-Tech Dynamic Arena Spotlight Rigs */}
-      <pointLight position={[0, 15, -7]} intensity={2.5} color={themeConfig.accent} distance={40} />
-      <pointLight position={[0, 8, 2]} intensity={1.8} color="#ffffff" distance={30} />
-      <pointLight position={[-14, 12, -8]} intensity={1.2} color={themeConfig.neonSecondary} distance={25} />
-      <pointLight position={[14, 12, -8]} intensity={1.2} color={themeConfig.accent} distance={25} />
     </group>
   );
 };
