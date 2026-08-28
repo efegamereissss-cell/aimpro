@@ -74,20 +74,22 @@ const TargetMesh: React.FC<TargetMeshProps> = ({ target, baseColor, hitColor }) 
           {/* Valorant 3D Omen Model with PBR Textures & Glowing Facial Slits */}
           <OmenBotModel isHit={isHit} hitColor={hitColor} />
 
-          {/* Invisible Precision Headshot Hitbox */}
-          <mesh position={[0, 0.72, 0]} userData={{ targetId: target.id, isHeadshot: true }} visible={false}>
-            <sphereGeometry args={[0.22, 8, 8]} />
+          {/* Precision Headshot Hitbox at Eye-Level (1.68m) */}
+          <mesh position={[0, 1.68, 0]} userData={{ targetId: target.id, isHeadshot: true }} visible={false}>
+            <sphereGeometry args={[0.22, 12, 12]} />
             <meshBasicMaterial transparent opacity={0} />
           </mesh>
 
-          {/* Invisible Precision Torso Hitbox */}
-          <mesh position={[0, 0.1, 0]} userData={{ targetId: target.id }} visible={false}>
-            <cylinderGeometry args={[0.3, 0.35, 0.9, 8]} />
+          {/* Precision Torso / Body Hitbox */}
+          <mesh position={[0, 0.95, 0]} userData={{ targetId: target.id }} visible={false}>
+            <cylinderGeometry args={[0.32, 0.35, 0.95, 12]} />
             <meshBasicMaterial transparent opacity={0} />
           </mesh>
         </group>
       ) : (
+        /* ========================================================================= */
         /* 2. HIGH-VISIBILITY SPHERICAL AIM TARGET (GRIDSHOT / FLICKING / TRACKING) */
+        /* ========================================================================= */
         <group userData={{ targetId: target.id }}>
           {/* Main Target Sphere with high contrast & smooth shading */}
           <mesh userData={{ targetId: target.id }} castShadow>
@@ -117,7 +119,7 @@ const TargetMesh: React.FC<TargetMeshProps> = ({ target, baseColor, hitColor }) 
 
       {/* Multi-HP Health Bar for Tracking / Bot Duels */}
       {target.maxHealth > 1 && (
-        <group position={[0, target.radius + (isHumanoid ? 0.95 : 0.45), 0]}>
+        <group position={[0, isHumanoid ? 2.05 : target.radius + 0.45, 0]}>
           <mesh position={[0, 0, 0]}>
             <planeGeometry args={[1.3, 0.14]} />
             <meshBasicMaterial color="#020617" />

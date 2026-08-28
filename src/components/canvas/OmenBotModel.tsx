@@ -8,12 +8,12 @@ interface OmenBotModelProps {
 }
 
 // Global Singleton Cache for Instant 0ms Omen Bot Spawning (No Lag, No Freezing)
-let cachedOmenModel: THREE.Group | null = null;
+let cachedOmenGroup: THREE.Group | null = null;
 let isOmenLoading = false;
 const loadingCallbacks: Array<(model: THREE.Group) => void> = [];
 
 function preloadOmenModel() {
-  if (cachedOmenModel || isOmenLoading) return;
+  if (cachedOmenGroup || isOmenLoading) return;
   isOmenLoading = true;
 
   const textureLoader = new THREE.TextureLoader();
@@ -48,50 +48,29 @@ function preloadOmenModel() {
   fbxLoader.load(
     '/models/omen_bot/source/New_Omen.fbx',
     fbx => {
-      // 1. Calculate raw dimensions & center
-      const initialBox = new THREE.Box3().setFromObject(fbx);
-      const size = initialBox.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      // Normalize to 1.85m tall tactical humanoid bot
-      const targetHeight = 1.85;
-      const scaleFactor = targetHeight / (maxDim > 0 ? maxDim : 1);
-      fbx.scale.setScalar(scaleFactor);
-
-      const centeredBox = new THREE.Box3().setFromObject(fbx);
-      const center = centeredBox.getCenter(new THREE.Vector3());
-      fbx.position.x -= center.x;
-      fbx.position.y -= center.y;
-      fbx.position.z -= center.z;
-
-      // 2. Assign high-fidelity Valorant materials & shadow properties
       fbx.traverse(child => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
           mesh.castShadow = true;
           mesh.receiveShadow = true;
 
-          // If material is multi-material or named head/body
-          if (Array.isArray(mesh.material)) {
-            mesh.material = mesh.material.map((mat, idx) => {
-              return idx === 1 || mat.name.toLowerCase().includes('head') ? headMaterial : bodyMaterial;
-            });
-          } else {
-            // Check name for head vs body
-            const name = (mesh.material?.name || '').toLowerCase();
-            mesh.material = name.includes('head') ? headMaterial : bodyMaterial;
-          }
+          // Assign body material to slot 0 and head material to slot 1
+          mesh.material = [bodyMaterial, headMaterial];
+
+          // Re-orient FBX coordinates (Z-up to Three.js Y-up)
+          mesh.rotation.set(-Math.PI / 2, 0, Math.PI);
+          // Scale to authentic 1.85m human height
+          mesh.scale.set(0.88, 0.88, 0.88);
+          mesh.position.set(0, 0, 0);
         }
       });
 
-      const wrapperGroup = new THREE.Group();
-      // Orient Omen to face forward towards player (+Z)
-      fbx.rotation.set(0, Math.PI, 0);
-      fbx.position.set(0, 0, 0);
-      wrapperGroup.add(fbx);
+      const wrapper = new THREE.Group();
+      wrapper.add(fbx);
 
-      cachedOmenModel = wrapperGroup;
+      cachedOmenGroup = wrapper;
       isOmenLoading = false;
-      loadingCallbacks.forEach(cb => cb(wrapperGroup.clone()));
+      loadingCallbacks.forEach(cb => cb(wrapper.clone()));
       loadingCallbacks.length = 0;
     },
     undefined,
@@ -107,12 +86,11 @@ if (typeof window !== 'undefined') {
 }
 
 export const OmenBotModel: React.FC<OmenBotModelProps> = ({ isHit = false, hitColor = '#00f0ff' }) => {
-  const [model, setModel] = useState<THREE.Group | null>(() => (cachedOmenModel ? cachedOmenModel.clone() : null));
-  const groupRef = useRef<THREE.Group>(null);
+  const [model, setModel] = useState<THREE.Group | null>(() => (cachedOmenGroup ? cachedOmenGroup.clone() : null));
 
   useEffect(() => {
-    if (cachedOmenModel) {
-      setModel(cachedOmenModel.clone());
+    if (cachedOmenGroup) {
+      setModel(cachedOmenGroup.clone());
     } else {
       loadingCallbacks.push(loadedModel => {
         setModel(loadedModel);
@@ -122,14 +100,14 @@ export const OmenBotModel: React.FC<OmenBotModelProps> = ({ isHit = false, hitCo
   }, []);
 
   return (
-    <group ref={groupRef} position={[0, 0, 0]}>
+    <group position={[0, 0, 0]}>
       {model && <primitive object={model} />}
 
       {/* Iconic Omen Glowing Facial Slits Point Light */}
-      <pointLight position={[0, 0.65, 0.25]} color="#00f0ff" intensity={isHit ? 6.0 : 2.5} distance={4} />
+      <pointLight position={[0, 1.68, 0.22]} color="#00f0ff" intensity={isHit ? 5.5 : 2.2} distance={3.5} />
 
       {/* Torso Dark Energy Core Aura */}
-      <pointLight position={[0, 0.1, 0.15]} color="#7c3aed" intensity={1.5} distance={3} />
+      <pointLight position={[0, 1.0, 0.15]} color="#7c3aed" intensity={1.2} distance={2.5} />
     </group>
   );
 };
