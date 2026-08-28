@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { ActiveTarget } from '../../types/game';
+import { OmenBotModel } from './OmenBotModel';
 
 export const TargetManager: React.FC = () => {
   const activeTargets = useGameStore(state => state.activeTargets);
@@ -43,7 +44,6 @@ const TargetMesh: React.FC<TargetMeshProps> = ({ target, baseColor, hitColor }) 
   const groupRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const coreRef = useRef<THREE.Mesh>(null);
-  const thrusterRef = useRef<THREE.Mesh>(null);
 
   const isHumanoid = target.shape === 'capsule';
 
@@ -58,11 +58,6 @@ const TargetMesh: React.FC<TargetMeshProps> = ({ target, baseColor, hitColor }) 
       const s = 0.88 + Math.sin(Date.now() * 0.008) * 0.06;
       coreRef.current.scale.set(s, s, s);
     }
-
-    if (thrusterRef.current) {
-      const ts = 0.85 + Math.random() * 0.3;
-      thrusterRef.current.scale.set(ts, ts * 1.2, ts);
-    }
   });
 
   const isHit = target.isHitThisFrame;
@@ -71,64 +66,29 @@ const TargetMesh: React.FC<TargetMeshProps> = ({ target, baseColor, hitColor }) 
 
   return (
     <group ref={groupRef} position={target.position} userData={{ targetId: target.id }}>
-      {/* 1. CS2 TACTICAL CYBERNETIC BOT (FOR STRAFE & BOT DUELS) */}
+      {/* ========================================================================= */}
+      {/* 1. 3D VALORANT OMEN AGENT BOT (TACTICAL BOT DUELLOSU & STRAFE ARENA) */}
+      {/* ========================================================================= */}
       {isHumanoid ? (
-        <group position={[0, 0, 0]}>
-          {/* Head & Headshot Hitbox */}
-          <group position={[0, target.radius * 0.95, 0]}>
-            <mesh userData={{ targetId: target.id }} castShadow>
-              <boxGeometry args={[target.radius * 0.75, target.radius * 0.85, target.radius * 0.75]} />
-              <meshStandardMaterial
-                color={isHit ? hitColor : '#1e293b'}
-                roughness={0.25}
-                metalness={0.8}
-                emissive={isHit ? hitColor : '#000000'}
-              />
-            </mesh>
-            {/* Glowing Headshot Visor */}
-            <mesh position={[0, 0.02, target.radius * 0.38]}>
-              <planeGeometry args={[target.radius * 0.65, target.radius * 0.22]} />
-              <meshBasicMaterial color={activeColor} />
-            </mesh>
-          </group>
+        <group position={[0, 0, 0]} userData={{ targetId: target.id }}>
+          {/* Valorant 3D Omen Model with PBR Textures & Glowing Facial Slits */}
+          <OmenBotModel isHit={isHit} hitColor={hitColor} />
 
-          {/* Torso / Chest Armor */}
-          <mesh position={[0, 0, 0]} userData={{ targetId: target.id }} castShadow>
-            <boxGeometry args={[target.radius * 1.1, target.radius * 1.3, target.radius * 0.75]} />
-            <meshStandardMaterial
-              color="#334155"
-              roughness={0.3}
-              metalness={0.7}
-            />
+          {/* Invisible Precision Headshot Hitbox */}
+          <mesh position={[0, 0.72, 0]} userData={{ targetId: target.id, isHeadshot: true }} visible={false}>
+            <sphereGeometry args={[0.22, 8, 8]} />
+            <meshBasicMaterial transparent opacity={0} />
           </mesh>
 
-          {/* Torso Center Target Bullseye Core */}
-          <mesh position={[0, 0.1, target.radius * 0.38]}>
-            <circleGeometry args={[target.radius * 0.28, 16]} />
-            <meshBasicMaterial color={activeColor} />
+          {/* Invisible Precision Torso Hitbox */}
+          <mesh position={[0, 0.1, 0]} userData={{ targetId: target.id }} visible={false}>
+            <cylinderGeometry args={[0.3, 0.35, 0.9, 8]} />
+            <meshBasicMaterial transparent opacity={0} />
           </mesh>
-
-          {/* Shoulders */}
-          <mesh position={[-target.radius * 0.75, 0.3, 0]} castShadow>
-            <boxGeometry args={[target.radius * 0.35, target.radius * 0.8, target.radius * 0.4]} />
-            <meshStandardMaterial color="#1e293b" roughness={0.3} metalness={0.8} />
-          </mesh>
-          <mesh position={[target.radius * 0.75, 0.3, 0]} castShadow>
-            <boxGeometry args={[target.radius * 0.35, target.radius * 0.8, target.radius * 0.4]} />
-            <meshStandardMaterial color="#1e293b" roughness={0.3} metalness={0.8} />
-          </mesh>
-
-          {/* Thruster Flame */}
-          <group position={[0, -target.radius * 0.75, 0]}>
-            <mesh ref={thrusterRef}>
-              <coneGeometry args={[target.radius * 0.25, target.radius * 0.6, 12]} />
-              <meshBasicMaterial color={activeColor} transparent opacity={0.85} />
-            </mesh>
-          </group>
         </group>
       ) : (
-        /* 2. HIGH-VISIBILITY SPHERICAL AIM TARGET */
-        <group>
+        /* 2. HIGH-VISIBILITY SPHERICAL AIM TARGET (GRIDSHOT / FLICKING / TRACKING) */
+        <group userData={{ targetId: target.id }}>
           {/* Main Target Sphere with high contrast & smooth shading */}
           <mesh userData={{ targetId: target.id }} castShadow>
             <sphereGeometry args={[target.radius, 32, 32]} />
@@ -155,9 +115,9 @@ const TargetMesh: React.FC<TargetMeshProps> = ({ target, baseColor, hitColor }) 
         </group>
       )}
 
-      {/* Multi-HP Health Bar for Tracking / Switching */}
+      {/* Multi-HP Health Bar for Tracking / Bot Duels */}
       {target.maxHealth > 1 && (
-        <group position={[0, target.radius + (isHumanoid ? 0.75 : 0.45), 0]}>
+        <group position={[0, target.radius + (isHumanoid ? 0.95 : 0.45), 0]}>
           <mesh position={[0, 0, 0]}>
             <planeGeometry args={[1.3, 0.14]} />
             <meshBasicMaterial color="#020617" />

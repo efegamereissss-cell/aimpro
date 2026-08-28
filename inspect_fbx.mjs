@@ -1,33 +1,63 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import * as fflate from 'fflate';
 import fs from 'fs';
 
-// Mock browser globals for FBXLoader in node
-global.THREE = THREE;
-global.fflate = fflate;
+// Node.js canvas polyfill mock for FBXLoader
+if (!globalThis.window) {
+  globalThis.window = {
+    innerWidth: 1920,
+    innerHeight: 1080
+  };
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({}),
+      style: {}
+    })
+  };
+}
 
-const fbxData = fs.readFileSync('C:/Users/eserh/Desktop/aim-trainer/public/models/rgx_karambit/source/hub.fbx');
-const arrayBuffer = fbxData.buffer.slice(fbxData.byteOffset, fbxData.byteOffset + fbxData.byteLength);
+const fbxLoader = new FBXLoader();
 
-const loader = new FBXLoader();
 try {
-  const fbx = loader.parse(arrayBuffer, '');
-  console.log('FBX loaded successfully!');
-  const box = new THREE.Box3().setFromObject(fbx);
-  console.log('Bounding box min:', JSON.stringify(box.min));
-  console.log('Bounding box max:', JSON.stringify(box.max));
-  console.log('Bounding box size:', JSON.stringify(box.getSize(new THREE.Vector3())));
-  console.log('Bounding box center:', JSON.stringify(box.getCenter(new THREE.Vector3())));
-  
-  let meshCount = 0;
-  fbx.traverse(c => {
-    if (c.isMesh) {
-      meshCount++;
-      console.log('Mesh name:', c.name, 'Geometry vertices:', c.geometry.attributes.position.count);
+  const havenBuffer = fs.readFileSync('./public/models/haven_c_site/source/Site C haven.fbx');
+  const havenObj = fbxLoader.parse(havenBuffer.buffer, '');
+  const havenBox = new THREE.Box3().setFromObject(havenObj);
+  const havenSize = havenBox.getSize(new THREE.Vector3());
+  const havenCenter = havenBox.getCenter(new THREE.Vector3());
+  console.log('--- HAVEN C-SITE FBX ---');
+  console.log('Haven Size:', havenSize);
+  console.log('Haven Center:', havenCenter);
+  let havenMeshCount = 0;
+  havenObj.traverse(child => {
+    if (child.isMesh) {
+      havenMeshCount++;
+      if (havenMeshCount <= 10) {
+        console.log(' Haven Mesh:', child.name, 'vertices:', child.geometry.attributes.position.count, 'mat:', child.material?.name || typeof child.material);
+      }
     }
   });
-  console.log('Total meshes:', meshCount);
+  console.log('Total Haven meshes:', havenMeshCount);
 } catch (e) {
-  console.error('FBX parse error:', e);
+  console.error('Error parsing Haven:', e);
+}
+
+try {
+  const omenBuffer = fs.readFileSync('./public/models/omen_bot/source/New_Omen.fbx');
+  const omenObj = fbxLoader.parse(omenBuffer.buffer, '');
+  const omenBox = new THREE.Box3().setFromObject(omenObj);
+  const omenSize = omenBox.getSize(new THREE.Vector3());
+  const omenCenter = omenBox.getCenter(new THREE.Vector3());
+  console.log('--- OMEN BOT FBX ---');
+  console.log('Omen Size:', omenSize);
+  console.log('Omen Center:', omenCenter);
+  let omenMeshCount = 0;
+  omenObj.traverse(child => {
+    if (child.isMesh) {
+      omenMeshCount++;
+      console.log(' Omen Mesh:', child.name, 'vertices:', child.geometry.attributes.position.count, 'mat:', child.material?.name || typeof child.material);
+    }
+  });
+  console.log('Total Omen meshes:', omenMeshCount);
+} catch (e) {
+  console.error('Error parsing Omen:', e);
 }

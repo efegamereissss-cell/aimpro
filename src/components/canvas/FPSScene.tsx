@@ -3,6 +3,7 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Arena } from './Arena';
 import { BhopParkourMap } from './BhopParkourMap';
+import { HavenCSiteMap } from './HavenCSiteMap';
 import { PlayerController } from './PlayerController';
 import { TargetManager } from './TargetManager';
 import { ParticleSystem } from './ParticleSystem';
@@ -43,6 +44,7 @@ export const FPSScene: React.FC = () => {
   const videoSettings = useSettingsStore(state => state.settings.video);
   const activeScenario = useGameStore(state => state.activeScenario);
   const isBhopMap = activeScenario.id.includes('bhop');
+  const isHavenMap = activeScenario.id === 'tactical_bot_duel_peeking' || (activeScenario.tags && activeScenario.tags.includes('Bot Peeking'));
 
   return (
     <div className="w-full h-full relative select-none bg-[#070a10]">
@@ -100,7 +102,13 @@ export const FPSScene: React.FC = () => {
         />
 
         <Suspense fallback={null}>
-          {isBhopMap ? <BhopParkourMap /> : <Arena />}
+          {isBhopMap ? (
+            <BhopParkourMap />
+          ) : isHavenMap ? (
+            <HavenCSiteMap />
+          ) : (
+            <Arena />
+          )}
           <TargetManager />
           <ParticleSystem />
           <FloatingText3D />
