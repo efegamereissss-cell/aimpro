@@ -87,8 +87,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         slashProgressRef.current = 0;
       } else {
         // Heavy Magnum kick for Arcane Sheriff / Pistol
-        const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'pistol' ? 0.09 : 0.07);
-        const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'pistol' ? 0.14 : 0.08);
+        const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'pistol' ? 0.08 : 0.07);
+        const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'pistol' ? 0.12 : 0.08);
         recoilRef.current.z = Math.min(recoilRef.current.z + kickZ, 0.18);
         recoilRef.current.pitch = Math.min(recoilRef.current.pitch + kickPitch, 0.22);
       }
@@ -172,14 +172,14 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           inspectProgressRef.current = 0;
         } else {
           // Trigger-guard 360° spin & tilt
-          if (p < 0.4) {
-            const spinP = p / 0.4;
+          if (p < 0.45) {
+            const spinP = p / 0.45;
             sheriffSpinAngle = spinP * Math.PI * 2; // 360° forward cowboy flip
-            inspectOffsetPos.set(-0.04 * Math.sin(spinP * Math.PI), 0.05 * Math.sin(spinP * Math.PI), 0);
+            inspectOffsetPos.set(-0.03 * Math.sin(spinP * Math.PI), 0.04 * Math.sin(spinP * Math.PI), 0);
           } else if (p < 0.8) {
-            const tiltP = (p - 0.4) / 0.4;
-            inspectRotY = Math.sin(tiltP * Math.PI) * 0.4; // Tilt cylinder to camera
-            inspectRotX = Math.sin(tiltP * Math.PI) * -0.2;
+            const tiltP = (p - 0.45) / 0.35;
+            inspectRotY = Math.sin(tiltP * Math.PI) * 0.35; // Tilt cylinder to camera
+            inspectRotX = Math.sin(tiltP * Math.PI) * -0.15;
           } else {
             const endP = (p - 0.8) / 0.2;
             inspectRotY = (1.0 - endP) * 0.1;
@@ -277,10 +277,10 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         <group visible={activeWeaponSlot === 'gun'}>
           {/* WEAPON TYPE: VALORANT ARCANE SHERIFF (REVOLVER) */}
           {weaponType === 'pistol' && (
-            <group position={[0, 0, 0]} rotation={[0, 0, 0]}>
+            <group position={[0, 0, 0]} rotation={[0.04, 0.06, -0.03]}>
               <group ref={sheriffSpinRef} position={[0, -0.04, 0]}>
                 <group position={[0, 0.04, 0]}>
-                  <ArcaneSheriffModel neonAccent={neonAccent} />
+                  <ArcaneSheriffModel />
                 </group>
               </group>
             </group>
