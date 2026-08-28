@@ -98,23 +98,26 @@ export const GameHUD: React.FC = () => {
 
       {/* Bottom Bar: Keybindings & Brand */}
       <div className="w-full flex items-center justify-between text-xs font-bold text-cyber-muted tracking-wider uppercase">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
+            <kbd className="text-cyber-primary font-mono font-black">1</kbd> Gun
+          </span>
+          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
+            <kbd className="text-emerald-400 font-mono font-black">3</kbd> RGX Blade
+          </span>
+          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
+            <kbd className="text-cyber-primary font-mono font-black">F</kbd> Inspect Spin
+          </span>
           <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
             <kbd className="text-cyber-primary font-mono font-black">ESC</kbd> Pause
           </span>
           <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
             <kbd className="text-cyber-primary font-mono font-black">R</kbd> Restart
           </span>
-          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
-            <kbd className="text-cyber-primary font-mono font-black">F</kbd> Inspect
-          </span>
-          <span className="flex items-center gap-1.5 bg-cyber-card/90 px-3 py-1.5 rounded-xl border border-cyber-border shadow-md">
-            <kbd className="text-cyber-primary font-mono font-black">SPACE</kbd> Jump
-          </span>
         </div>
         <div className="flex items-center gap-2 text-cyber-primary font-bold">
           <ShieldAlert className="w-4 h-4" />
-          <span>AIMPRO 2.0 PRECISION ENGINE</span>
+          <span>AIMPRO 2.0 ULTIMATE</span>
         </div>
       </div>
     </div>

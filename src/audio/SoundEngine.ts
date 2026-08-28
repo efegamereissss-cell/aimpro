@@ -1,7 +1,7 @@
 /**
  * AIMPRO 2.0 Next-Gen Procedural Web Audio API Synthesizer
  * Zero-latency polyphonic synthesis with 3D spatial panning, harmonic crystal chimes,
- * weapon mechanical layers, and dynamic combo pitch scaling.
+ * weapon mechanical layers, dynamic combo pitch scaling, and RGX Karambit slash audio.
  */
 class ProceduralSoundEngine {
   private ctx: AudioContext | null = null;
@@ -38,9 +38,6 @@ class ProceduralSoundEngine {
     }
   }
 
-  /**
-   * Crisp Hit Sound with customizable harmonic timbre & optional combo pitch scaling
-   */
   public playHitSound(comboStreak: number = 0, isHeadshot: boolean = false, panX: number = 0) {
     try {
       this.init();
@@ -50,16 +47,14 @@ class ProceduralSoundEngine {
       let freq = this.baseHitFrequency;
 
       if (this.comboPitchEscalation && comboStreak > 0) {
-        // Semitone pitch step per combo (max 24 semitones / 2 octaves)
         const semitones = Math.min(comboStreak, 24);
         freq = freq * Math.pow(2, semitones / 12);
       }
 
       if (isHeadshot) {
-        freq *= 1.498; // Perfect 5th interval for crisp headshot pop
+        freq *= 1.498;
       }
 
-      // Stereo Panner
       const panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
       if (panner) {
         panner.pan.setValueAtTime(Math.max(-0.8, Math.min(0.8, panX / 10)), now);
@@ -69,7 +64,6 @@ class ProceduralSoundEngine {
       gain.gain.setValueAtTime(this.hitVolume * 0.45, now);
 
       if (this.preset === 'aimlab_crystal') {
-        // High-purity crystalline sine + sparkling overtone
         const osc1 = this.ctx.createOscillator();
         const osc2 = this.ctx.createOscillator();
         osc1.type = 'sine';
@@ -103,7 +97,6 @@ class ProceduralSoundEngine {
         osc1.stop(now + 0.18);
         osc2.stop(now + 0.18);
       } else if (this.preset === 'kovaak_bell') {
-        // Metallic tubular bell with inharmonic frequencies
         const osc1 = this.ctx.createOscillator();
         const osc2 = this.ctx.createOscillator();
         osc1.type = 'triangle';
@@ -127,7 +120,6 @@ class ProceduralSoundEngine {
         osc1.stop(now + 0.23);
         osc2.stop(now + 0.23);
       } else {
-        // Quake / Cyber ding
         const osc = this.ctx.createOscillator();
         osc.type = 'square';
         osc.frequency.setValueAtTime(freq * 1.15, now);
@@ -152,9 +144,6 @@ class ProceduralSoundEngine {
     }
   }
 
-  /**
-   * Continuous tracking tick sound (hum / fast pulse)
-   */
   public playTrackingTick(accuracyRatio: number = 1.0) {
     try {
       this.init();
@@ -180,9 +169,6 @@ class ProceduralSoundEngine {
     }
   }
 
-  /**
-   * Layered Gunshot Sound with mechanical click and punchy impulse
-   */
   public playGunshot(type: 'pistol' | 'rifle' | 'beam' | 'sniper' | 'shotgun' = 'pistol') {
     try {
       this.init();
@@ -193,7 +179,6 @@ class ProceduralSoundEngine {
       gain.gain.setValueAtTime(this.gunVolume * 0.45, now);
 
       if (type === 'beam') {
-        // Laser charge hum & snap
         const osc = this.ctx.createOscillator();
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(520, now);
@@ -207,7 +192,6 @@ class ProceduralSoundEngine {
         return;
       }
 
-      // Noise generator for weapon blast
       const bufferSize = this.ctx.sampleRate * 0.12;
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const output = buffer.getChannelData(0);
@@ -223,7 +207,6 @@ class ProceduralSoundEngine {
       filter.frequency.setValueAtTime(type === 'sniper' ? 550 : 1300, now);
       filter.Q.setValueAtTime(type === 'rifle' ? 2.5 : 3.5, now);
 
-      // Low end punch oscillator
       const subOsc = this.ctx.createOscillator();
       subOsc.type = 'sine';
       subOsc.frequency.setValueAtTime(type === 'sniper' ? 190 : 280, now);
@@ -252,8 +235,64 @@ class ProceduralSoundEngine {
   }
 
   /**
-   * Weapon Inspect / Mechanical click sound (F key)
+   * Valorant RGX 11z Pro Blade Knife Slash Sound
    */
+  public playKnifeSlash() {
+    try {
+      this.init();
+      if (!this.ctx || !this.masterGain) return;
+
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(800, now);
+      osc.frequency.exponentialRampToValueAtTime(200, now + 0.08);
+
+      gain.gain.setValueAtTime(this.gunVolume * 0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.12);
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Valorant RGX 11z Pro Karambit 360 Spin Whoosh Sound
+   */
+  public playKarambitSpin() {
+    try {
+      this.init();
+      if (!this.ctx || !this.masterGain) return;
+
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(450, now);
+      osc.frequency.exponentialRampToValueAtTime(950, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(350, now + 0.18);
+
+      gain.gain.setValueAtTime(this.gunVolume * 0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now);
+      osc.stop(now + 0.22);
+    } catch {
+      // ignore
+    }
+  }
+
   public playWeaponInspect() {
     try {
       this.init();
@@ -280,9 +319,6 @@ class ProceduralSoundEngine {
     }
   }
 
-  /**
-   * Miss click / dry fire sound
-   */
   public playMissSound() {
     try {
       this.init();
@@ -309,9 +345,6 @@ class ProceduralSoundEngine {
     }
   }
 
-  /**
-   * Countdown beep
-   */
   public playCountdown(isGo: boolean = false) {
     try {
       this.init();
