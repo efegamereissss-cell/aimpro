@@ -59,7 +59,7 @@ function preloadHavenModel() {
   fbxLoader.load(
     '/models/haven_c_site/source/Site C haven.fbx',
     fbx => {
-      // 1. CRITICAL: Strip all 8 embedded Maya studio lights with 100,000 intensity!
+      // 1. Strip all 8 embedded Maya studio lights with 100,000 intensity!
       const lightsToRemove: THREE.Object3D[] = [];
       fbx.traverse(child => {
         if ((child as THREE.Light).isLight) {
@@ -72,8 +72,8 @@ function preloadHavenModel() {
 
       // 2. Scale from Maya cm to Three.js meters (0.01 factor)
       fbx.scale.set(0.01, 0.01, 0.01);
-      // Position Haven C-Site courtyard directly in front of the player
-      fbx.position.set(0, 0, -5.0);
+      // Center C-Site courtyard and double boxes directly at world origin (0, 0, 0)
+      fbx.position.set(1.75, 0, 5.0);
 
       // 3. Assign rich tactical materials and optimize performance (0 dropped frames)
       fbx.traverse(child => {
@@ -124,7 +124,7 @@ export const HavenCSiteMap: React.FC = () => {
   return (
     <group position={[0, 0, 0]}>
       {/* Valorant Haven Soft Sky Fog */}
-      <fog attach="fog" args={['#090d14', 30, 95]} />
+      <fog attach="fog" args={['#090d14', 35, 100]} />
 
       {/* Main Valorant Haven C-Site 3D Geometry */}
       {model && <primitive object={model} />}
@@ -136,7 +136,7 @@ export const HavenCSiteMap: React.FC = () => {
       </mesh>
 
       {/* Distance Floor Markers */}
-      {[-6, -12, -18, -24].map(z => (
+      {[-8, -4, 0, 4].map(z => (
         <group key={z} position={[0, 0.012, z]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[30, 0.06]} />
@@ -146,11 +146,11 @@ export const HavenCSiteMap: React.FC = () => {
       ))}
 
       {/* Radianite Energy Boxes at C-Site Plat */}
-      <mesh position={[-6, 1.2, -14]} castShadow>
+      <mesh position={[-6, 1.2, -8]} castShadow>
         <boxGeometry args={[1.6, 2.4, 1.6]} />
         <meshStandardMaterial color="#00f0ff" emissive="#00f0ff" emissiveIntensity={1.0} roughness={0.2} metalness={0.8} />
       </mesh>
-      <mesh position={[6, 1.2, -14]} castShadow>
+      <mesh position={[6, 1.2, -8]} castShadow>
         <boxGeometry args={[1.6, 2.4, 1.6]} />
         <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={0.8} roughness={0.25} metalness={0.7} />
       </mesh>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
@@ -29,8 +29,8 @@ function preloadOmenModel() {
   const bodyMaterial = new THREE.MeshStandardMaterial({
     map: bodyDiffuse,
     normalMap: bodyNormal,
-    roughness: 0.5,
-    metalness: 0.6,
+    roughness: 0.45,
+    metalness: 0.65,
     side: THREE.DoubleSide
   });
 
@@ -48,39 +48,40 @@ function preloadOmenModel() {
   fbxLoader.load(
     '/models/omen_bot/source/New_Omen.fbx',
     fbx => {
-      // 1. Reset root FBX transforms
-      fbx.position.set(0, 0, 0);
-      fbx.rotation.set(0, 0, 0);
-      fbx.scale.set(1, 1, 1);
+      let rawMesh: THREE.Mesh | null = null;
 
-      // 2. Reset and re-orient child mesh (Z-up in FBX -> Y-up in Three.js)
+      // Extract geometry from FBX SkinnedMesh and convert to static high-perf Mesh
       fbx.traverse(child => {
-        if ((child as THREE.Mesh).isMesh) {
-          const mesh = child as THREE.Mesh;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          mesh.material = [bodyMaterial, headMaterial];
-          mesh.position.set(0, 0, 0);
-          mesh.rotation.set(-Math.PI / 2, 0, Math.PI);
-          mesh.scale.set(1, 1, 1);
+        if ((child as THREE.Mesh).isMesh && child.name.includes('Omen')) {
+          rawMesh = child as THREE.Mesh;
         }
       });
 
-      // 3. Normalize scale so total height is EXACTLY 1.85 meters (Valorant agent size)
-      const rawBox = new THREE.Box3().setFromObject(fbx);
-      const rawHeight = rawBox.max.y - rawBox.min.y;
-      const targetHeight = 1.85;
-      const scale = targetHeight / (rawHeight > 0 ? rawHeight : 2.1084);
-      fbx.scale.setScalar(scale);
-
-      // 4. Align feet perfectly to ground plane (Y = 0.00) and center on X=0, Z=0
-      const scaledBox = new THREE.Box3().setFromObject(fbx);
-      fbx.position.y = -scaledBox.min.y;
-      fbx.position.x = -(scaledBox.min.x + scaledBox.max.x) / 2;
-      fbx.position.z = -(scaledBox.min.z + scaledBox.max.z) / 2;
+      if (!rawMesh) {
+        fbx.traverse(child => {
+          if ((child as THREE.Mesh).isMesh && !rawMesh) {
+            rawMesh = child as THREE.Mesh;
+          }
+        });
+      }
 
       const wrapper = new THREE.Group();
-      wrapper.add(fbx);
+
+      if (rawMesh) {
+        // Create static Mesh with multi-materials (Group 0: Body, Group 1: Head)
+        const omenMesh = new THREE.Mesh((rawMesh as THREE.Mesh).geometry, [bodyMaterial, headMaterial]);
+        omenMesh.castShadow = true;
+        omenMesh.receiveShadow = true;
+
+        // Orient FBX Z-up to Three.js Y-up and face front
+        omenMesh.rotation.set(-Math.PI / 2, 0, Math.PI);
+        // Scale 210.84cm to exact 1.85 meters
+        const scale = 0.8774 * 0.01;
+        omenMesh.scale.set(scale, scale, scale);
+        omenMesh.position.set(0, 0, 0);
+
+        wrapper.add(omenMesh);
+      }
 
       cachedOmenGroup = wrapper;
       isOmenLoading = false;
@@ -118,7 +119,7 @@ export const OmenBotModel: React.FC<OmenBotModelProps> = ({ isHit = false, hitCo
       {model && <primitive object={model} />}
 
       {/* Iconic Omen Glowing Facial Slits Point Light */}
-      <pointLight position={[0, 1.68, 0.22]} color="#00f0ff" intensity={isHit ? 5.0 : 2.0} distance={3.0} />
+      <pointLight position={[0, 1.68, 0.22]} color="#00f0ff" intensity={isHit ? 5.5 : 2.2} distance={3.0} />
 
       {/* Torso Dark Energy Core Aura */}
       <pointLight position={[0, 1.0, 0.15]} color="#7c3aed" intensity={1.0} distance={2.0} />

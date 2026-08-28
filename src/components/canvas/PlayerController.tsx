@@ -96,12 +96,21 @@ export const PlayerController: React.FC = () => {
 
   // Reset Player on scenario change
   useEffect(() => {
-    posRef.current.set(0, 1.62, 0);
+    const isHaven = scenario.id === 'tactical_bot_duel_peeking' || (scenario.tags && scenario.tags.includes('Bot Peeking'));
+    const isBhop = scenario.id.includes('bhop');
+
+    if (isHaven) {
+      posRef.current.set(0, 1.62, 8.0);
+    } else if (isBhop) {
+      posRef.current.set(0, 1.62, 2.0);
+    } else {
+      posRef.current.set(0, 1.62, 0);
+    }
     velRef.current.set(0, 0, 0);
     pitchRef.current = 0;
     yawRef.current = 0;
     isGroundedRef.current = true;
-    camera.position.set(0, 1.62, 0);
+    camera.position.copy(posRef.current);
     camera.quaternion.set(0, 0, 0, 1);
   }, [scenario.id, camera]);
 
