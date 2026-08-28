@@ -23,7 +23,9 @@ import {
   Wind,
   BarChart2,
   FolderOpen,
-  PlusCircle
+  PlusCircle,
+  ShieldCheck,
+  Lock
 } from 'lucide-react';
 
 interface MainMenuProps {
@@ -194,7 +196,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <Wind className="w-3.5 h-3.5 animate-bounce" />
                 🐰 Mod 2: CS 1.6 Movement
               </span>
-              <span className="text-xs font-mono font-bold text-emerald-400">1000+ UPS</span>
+              <span className="text-xs font-mono font-bold text-emerald-400">1:1 Bhop</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-none drop-shadow-md">
               Bunny Hop Parkuru
@@ -399,6 +401,33 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 5. CYBER SECURITY & DDOS GUARD FOOTER STATUS BAR */}
+      {/* ========================================================================= */}
+      <div className="glass-panel p-3.5 rounded-2xl border border-cyber-border/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono text-cyber-muted backdrop-blur-xl">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span className="text-slate-300 font-bold">AIMPRO CYBER SHIELD v4.0</span>
+          <span className="text-[10px] text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30">
+            PROTECTED
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4 text-[11px]">
+          <span className="flex items-center gap-1 text-slate-400">
+            <Lock className="w-3 h-3 text-cyber-primary" />
+            Anti-Tamper & Obfuscated
+          </span>
+          <span className="flex items-center gap-1 text-slate-400">
+            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+            DDoS Guard Active
+          </span>
+          <span className="text-slate-400">
+            SSL 256-Bit Encrypted
+          </span>
         </div>
       </div>
     </div>
