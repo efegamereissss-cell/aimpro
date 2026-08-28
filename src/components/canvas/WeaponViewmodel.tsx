@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { soundEngine } from '../../audio/SoundEngine';
+import { RGXKarambitModel } from './RGXKarambitModel';
 
 interface WeaponViewmodelProps {
   isFiring: boolean;
@@ -69,8 +70,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 
     const t = state.clock.getElapsedTime();
 
-    // 1. Dynamic RGX 11z Pro RGB Chroma Color Shift
-    const chromaHue = (t * 0.35) % 1.0;
+    // 1. Dynamic RGX 11z Pro RGB Chroma Color Shift (Green -> Cyan -> Magenta -> Yellow)
+    const chromaHue = (t * 0.3) % 1.0;
     const chromaRgb = new THREE.Color().setHSL(chromaHue, 1.0, 0.55);
     setRgbColor('#' + chromaRgb.getHexString());
 
@@ -78,7 +79,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     const swayX = -mouseDelta.x * 0.0006;
     const swayY = -mouseDelta.y * 0.0006;
 
-    // 3. Weapon Bobbing (breathing + walking movement)
+    // 3. Weapon Bobbing
     const bobFreq = movementSpeed > 0.1 ? 12 : 3;
     const bobAmp = movementSpeed > 0.1 ? 0.015 : 0.003;
     const bobX = Math.cos(t * bobFreq) * bobAmp;
@@ -105,13 +106,13 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     let slashRotX = 0;
     let slashPosZ = 0;
     if (isSlashingRef.current) {
-      slashProgressRef.current += delta * 12;
+      slashProgressRef.current += delta * 14;
       if (slashProgressRef.current >= Math.PI) {
         isSlashingRef.current = false;
         slashProgressRef.current = 0;
       } else {
-        slashRotX = Math.sin(slashProgressRef.current) * 1.4;
-        slashPosZ = Math.sin(slashProgressRef.current) * 0.18;
+        slashRotX = Math.sin(slashProgressRef.current) * 1.5;
+        slashPosZ = Math.sin(slashProgressRef.current) * 0.22;
       }
     }
 
@@ -121,7 +122,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     let karambitSpinAngle = 0;
 
     if (isInspectingRef.current) {
-      const speed = activeSlot === 'rgx_knife' ? 7.5 : 2.2;
+      const speed = activeSlot === 'rgx_knife' ? 9.0 : 2.2;
       inspectProgressRef.current += delta * speed;
 
       if (activeSlot === 'rgx_knife') {
@@ -150,7 +151,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     // 6. Target Local Position
     const gunHipfirePos = new THREE.Vector3(0.24, -0.21, -0.48);
     const gunAdsPos = new THREE.Vector3(0.0, -0.148, -0.38);
-    const knifePos = new THREE.Vector3(0.22, -0.24, -0.42 - slashPosZ);
+    const knifePos = new THREE.Vector3(0.24, -0.22, -0.44 - slashPosZ);
     const basePos = activeSlot === 'rgx_knife' ? knifePos : (isADS ? gunAdsPos : gunHipfirePos);
 
     // Transform local weapon position into Camera World Space
@@ -180,76 +181,16 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 
   return (
     <group ref={groupRef}>
-      {/* First-Person View Orientation */}
       <group rotation={[0, Math.PI, 0]}>
         {/* ========================================================================= */}
         {/* WEAPON: VALORANT RGX 11z PRO 3.0 BLADE / KARAMBIT CLAW KNIFE */}
         {/* ========================================================================= */}
         {activeSlot === 'rgx_knife' && (
-          <group position={[0, 0, 0]} rotation={[0.2, 0.4, -0.3]}>
-            <group ref={karambitGroupRef}>
-              {/* Rear Index Finger Retention Ring (Center of Spin Axis) */}
-              <mesh position={[0, -0.09, -0.06]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-                <torusGeometry args={[0.024, 0.007, 16, 32]} />
-                <meshStandardMaterial color="#0b0f19" roughness={0.3} metalness={0.9} />
-              </mesh>
-
-              {/* RGX Carbon-Fiber Curved Ergonomic Handle Chassis */}
-              <mesh position={[0, -0.02, -0.03]} rotation={[-0.2, 0, 0]} castShadow>
-                <boxGeometry args={[0.032, 0.11, 0.045]} />
-                <meshStandardMaterial color="#111827" roughness={0.35} metalness={0.8} />
-              </mesh>
-
-              {/* RGX Transparent Polycarbonate Microchip / Circuit Housing Window */}
-              <mesh position={[0, -0.01, -0.01]}>
-                <boxGeometry args={[0.034, 0.065, 0.038]} />
-                <meshStandardMaterial
-                  color="#1e293b"
-                  transparent
-                  opacity={0.65}
-                  roughness={0.1}
-                  metalness={0.95}
-                />
-              </mesh>
-
-              {/* Internal Glowing RGB Circuit PCB Motherboard */}
-              <mesh position={[0, -0.01, -0.01]}>
-                <boxGeometry args={[0.022, 0.05, 0.025]} />
-                <meshBasicMaterial color={rgbColor} />
-              </mesh>
-
-              {/* Digital LED Kill Counter Screen on Handle */}
-              <mesh position={[0, -0.045, -0.01]} rotation={[-0.2, 0, 0]}>
-                <planeGeometry args={[0.022, 0.012]} />
-                <meshBasicMaterial color={rgbColor} />
-              </mesh>
-
-              {/* Titanium Blade Guard & Hilt Bracket */}
-              <mesh position={[0, 0.05, 0.0]}>
-                <boxGeometry args={[0.03, 0.035, 0.05]} />
-                <meshStandardMaterial color="#334155" roughness={0.2} metalness={0.95} />
-              </mesh>
-
-              {/* Iconic Curved RGX 11z Pro Claw Blade Core (Titanium Spine) */}
-              <mesh position={[0, 0.12, 0.04]} rotation={[0.4, 0, 0]} castShadow>
-                <boxGeometry args={[0.014, 0.15, 0.045]} />
-                <meshStandardMaterial color="#0f172a" roughness={0.15} metalness={0.95} />
-              </mesh>
-
-              {/* Curved RGX Razor-Sharp RGB Plasma Cutting Edge */}
-              <mesh position={[0, 0.14, 0.065]} rotation={[0.48, 0, 0]}>
-                <boxGeometry args={[0.008, 0.17, 0.022]} />
-                <meshBasicMaterial color={rgbColor} />
-              </mesh>
-
-              {/* Holographic Blade Tip Claw Hook */}
-              <mesh position={[0, 0.22, 0.095]} rotation={[0.8, 0, 0]}>
-                <coneGeometry args={[0.016, 0.06, 4]} />
-                <meshBasicMaterial color={rgbColor} />
-              </mesh>
-
-              {/* Dynamic RGB Blade Point Light */}
-              <pointLight position={[0, 0.14, 0.06]} color={rgbColor} intensity={2.8} distance={5} />
+          <group position={[0, 0, 0]} rotation={[0.4, 0.5, -0.5]} scale={[1.2, 1.2, 1.2]}>
+            <group ref={karambitGroupRef} position={[0.015, 0.21, 0]}>
+              <group position={[-0.015, -0.21, 0]}>
+                <RGXKarambitModel rgbColor={rgbColor} />
+              </group>
             </group>
           </group>
         )}
