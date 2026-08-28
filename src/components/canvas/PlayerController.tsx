@@ -7,6 +7,9 @@ import { calculateMouseRadians } from '../../utils/sensitivity';
 import { soundEngine } from '../../audio/SoundEngine';
 import { WeaponViewmodel } from './WeaponViewmodel';
 
+const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+const MAX_PITCH = Math.PI / 2 - 0.01; // ~89.4 degrees
+
 export const PlayerController: React.FC = () => {
   const { camera, gl, scene } = useThree();
   const gameStatus = useGameStore(state => state.status);
@@ -21,7 +24,7 @@ export const PlayerController: React.FC = () => {
 
   const settings = useSettingsStore(state => state.settings);
 
-  // Synchronized persistent refs to keep event listeners 100% stable
+  // Synchronized persistent refs
   const gameStatusRef = useRef(gameStatus);
   gameStatusRef.current = gameStatus;
 
@@ -34,9 +37,6 @@ export const PlayerController: React.FC = () => {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  // Rotation Euler
-  const pitchRef = useRef(0);
-  const yawRef = useRef(0);
   const mouseDeltaRef = useRef({ x: 0, y: 0 });
   const movementRef = useRef({ forward: false, backward: false, left: false, right: false });
   const isMouseDownRef = useRef(false);
@@ -44,13 +44,11 @@ export const PlayerController: React.FC = () => {
   const lastShotTimeRef = useRef(0);
   const raycaster = useRef(new THREE.Raycaster());
 
-  // Spike & Transition Guard
-  const pointerLockTimeRef = useRef(0);
-
   // Base camera setup
   useEffect(() => {
     camera.position.set(0, 1.7, 0); // Standard FPS eye height (1.7m)
-    camera.rotation.order = 'YXZ';
+    _euler.set(0, 0, 0, 'YXZ');
+    camera.quaternion.setFromEuler(_euler);
   }, [camera]);
 
   const handleFire = useCallback(() => {
@@ -129,15 +127,16 @@ export const PlayerController: React.FC = () => {
   // Pointer Lock request helper
   const requestLock = useCallback(() => {
     if (document.pointerLockElement !== gl.domElement) {
-      pointerLockTimeRef.current = Date.now();
       gl.domElement.requestPointerLock();
     }
   }, [gl]);
 
   // STABLE Event Listeners
   useEffect(() => {
+    let ignoreInitialDeltas = 0;
+
     const handlePointerLockChange = () => {
-      pointerLockTimeRef.current = Date.now();
+      ignoreInitialDeltas = 3; // ignore first 3 mousemove ticks to filter any recentering spike
       mouseDeltaRef.current = { x: 0, y: 0 };
       if (document.pointerLockElement !== gl.domElement) {
         if (gameStatusRef.current === 'playing') {
@@ -149,16 +148,16 @@ export const PlayerController: React.FC = () => {
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement) return;
 
-      // 1. Ignore acquisition transition spikes
-      if (Date.now() - pointerLockTimeRef.current < 100) {
+      if (ignoreInitialDeltas > 0) {
+        ignoreInitialDeltas--;
         return;
       }
 
       const deltaX = e.movementX || 0;
       const deltaY = e.movementY || 0;
 
-      // 2. Ignore anomalous spikes
-      if (Math.abs(deltaX) > 350 || Math.abs(deltaY) > 350) {
+      // Filter hardware or OS screen-recenter glitch
+      if (Math.abs(deltaX) > 400 || Math.abs(deltaY) > 400) {
         return;
       }
 
@@ -172,12 +171,16 @@ export const PlayerController: React.FC = () => {
       const radX = calculateMouseRadians(deltaX, sens * adsFactor, preset);
       const radY = calculateMouseRadians(deltaY, sens * adsFactor, preset);
 
-      yawRef.current -= radX;
-      pitchRef.current -= currentSettings.controls.invertY ? -radY : radY;
+      // True Gimbal-Lock Free Quaternion rotation
+      _euler.setFromQuaternion(camera.quaternion, 'YXZ');
+      _euler.y -= radX;
+      _euler.x -= currentSettings.controls.invertY ? -radY : radY;
 
-      // Clamp vertical pitch [-89 deg, 89 deg]
-      const maxPitch = (89 * Math.PI) / 180;
-      pitchRef.current = Math.max(-maxPitch, Math.min(maxPitch, pitchRef.current));
+      // Clamp vertical pitch [-89.4 deg, 89.4 deg]
+      _euler.x = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, _euler.x));
+      _euler.z = 0;
+
+      camera.quaternion.setFromEuler(_euler);
     };
 
     const handleMouseDown = (e: MouseEvent) => {
@@ -238,7 +241,7 @@ export const PlayerController: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gl, requestLock, pauseGame, restartGame]);
+  }, [camera, gl, requestLock, pauseGame, restartGame]);
 
   // Main Loop
   useFrame((_, delta) => {
@@ -247,17 +250,13 @@ export const PlayerController: React.FC = () => {
       tickGame(delta);
     }
 
-    // 2. Apply Camera Rotation
-    camera.rotation.y = yawRef.current;
-    camera.rotation.x = pitchRef.current;
-
-    // Reset mouse delta after frame consumption
+    // Reset mouse delta smoothly
     mouseDeltaRef.current = {
       x: THREE.MathUtils.lerp(mouseDeltaRef.current.x, 0, delta * 20),
       y: THREE.MathUtils.lerp(mouseDeltaRef.current.y, 0, delta * 20)
     };
 
-    // 3. Continuous Firing / Tracking Handling
+    // 2. Continuous Firing / Tracking Handling
     if (isMouseDownRef.current && gameStatusRef.current === 'playing') {
       const currentScenario = activeScenarioRef.current;
       const targets = activeTargetsRef.current;
@@ -281,16 +280,11 @@ export const PlayerController: React.FC = () => {
   });
 
   return (
-    <group>
-      {/* Attached Weapon Viewmodel */}
-      <primitive object={camera}>
-        <WeaponViewmodel
-          isFiring={isMouseDownRef.current && gameStatus === 'playing'}
-          isADS={isADSDownRef.current}
-          mouseDelta={mouseDeltaRef.current}
-          movementSpeed={0}
-        />
-      </primitive>
-    </group>
+    <WeaponViewmodel
+      isFiring={isMouseDownRef.current && gameStatus === 'playing'}
+      isADS={isADSDownRef.current}
+      mouseDelta={mouseDeltaRef.current}
+      movementSpeed={0}
+    />
   );
 };

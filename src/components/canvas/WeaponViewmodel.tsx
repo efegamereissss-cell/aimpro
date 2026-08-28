@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -20,6 +20,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
   const muzzleFlashRef = useRef<THREE.PointLight>(null);
   const recoilRef = useRef({ z: 0, pitch: 0 });
   const scenario = useGameStore(state => state.activeScenario);
+  const { camera } = useThree();
 
   const isBeam = scenario.weaponType === 'beam';
 
@@ -27,8 +28,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     if (!groupRef.current) return;
 
     // 1. Weapon Sway (lag behind mouse rotation)
-    const swayX = -mouseDelta.x * 0.0008;
-    const swayY = -mouseDelta.y * 0.0008;
+    const swayX = -mouseDelta.x * 0.0006;
+    const swayY = -mouseDelta.y * 0.0006;
 
     // 2. Weapon Bobbing (breathing + walking movement)
     const time = state.clock.getElapsedTime();
@@ -39,52 +40,33 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 
     // 3. Recoil Kickback
     if (isFiring) {
-      recoilRef.current.z = Math.min(recoilRef.current.z + 0.06, 0.12);
-      recoilRef.current.pitch = Math.min(recoilRef.current.pitch + 0.08, 0.15);
+      recoilRef.current.z = Math.min(recoilRef.current.z + 0.05, 0.1);
+      recoilRef.current.pitch = Math.min(recoilRef.current.pitch + 0.06, 0.12);
     }
-    // Smooth recoil recovery
     recoilRef.current.z = THREE.MathUtils.lerp(recoilRef.current.z, 0, delta * 15);
     recoilRef.current.pitch = THREE.MathUtils.lerp(recoilRef.current.pitch, 0, delta * 15);
 
-    // 4. Target Position (Hipfire vs ADS)
-    const hipfirePos = new THREE.Vector3(0.28, -0.25, -0.55);
-    const adsPos = new THREE.Vector3(0.0, -0.165, -0.42);
+    // 4. Target Local Position (Hipfire vs ADS)
+    const hipfirePos = new THREE.Vector3(0.26, -0.22, -0.52);
+    const adsPos = new THREE.Vector3(0.0, -0.155, -0.4);
+    const basePos = isADS ? adsPos : hipfirePos;
 
-    const targetPos = isADS ? adsPos : hipfirePos;
+    // Transform local weapon position into Camera World Space
+    const localPos = new THREE.Vector3(
+      basePos.x + swayX + bobX,
+      basePos.y + swayY + bobY,
+      basePos.z + recoilRef.current.z
+    );
+    const worldPos = localPos.applyMatrix4(camera.matrixWorld);
+    groupRef.current.position.copy(worldPos);
 
-    // Apply Sway, Bobbing and Recoil to viewmodel position
-    groupRef.current.position.x = THREE.MathUtils.lerp(
-      groupRef.current.position.x,
-      targetPos.x + swayX + bobX,
-      delta * 14
-    );
-    groupRef.current.position.y = THREE.MathUtils.lerp(
-      groupRef.current.position.y,
-      targetPos.y + swayY + bobY,
-      delta * 14
-    );
-    groupRef.current.position.z = THREE.MathUtils.lerp(
-      groupRef.current.position.z,
-      targetPos.z + recoilRef.current.z,
-      delta * 18
-    );
+    // Apply Camera Rotation + Weapon Sway Tilt
+    groupRef.current.quaternion.copy(camera.quaternion);
 
-    // Viewmodel Rotation (sway tilt + recoil kick)
-    groupRef.current.rotation.x = THREE.MathUtils.lerp(
-      groupRef.current.rotation.x,
-      recoilRef.current.pitch + swayY * 0.5,
-      delta * 14
-    );
-    groupRef.current.rotation.y = THREE.MathUtils.lerp(
-      groupRef.current.rotation.y,
-      swayX * 0.8,
-      delta * 14
-    );
-    groupRef.current.rotation.z = THREE.MathUtils.lerp(
-      groupRef.current.rotation.z,
-      swayX * 1.2,
-      delta * 14
-    );
+    // Apply local rotation tilts (recoil pitch & sway roll)
+    groupRef.current.rotateX(recoilRef.current.pitch + swayY * 0.4);
+    groupRef.current.rotateY(swayX * 0.6);
+    groupRef.current.rotateZ(swayX * 1.0);
 
     // Muzzle Flash Light intensity
     if (muzzleFlashRef.current) {
