@@ -115,12 +115,12 @@ export const PlayerController: React.FC = () => {
     const currentSettings = settingsRef.current;
 
     const now = Date.now();
-    // Enforce authentic fire rate intervals (Pistol/Sheriff: 280ms per shot, Knife: 350ms, Rifle: based on RPS)
+    // Zero-delay ultra-responsive clicking for fast flicking / Gridshot drills
     const intervalMs =
       currentSlot === 'knife'
-        ? 350
+        ? 180
         : currentSlot === 'sheriff'
-        ? 280
+        ? 20 // Instantaneous registration for rapid clicking
         : 1000 / (currentScenario.fireRateRps || 9.75);
 
     if (now - lastShotTimeRef.current < intervalMs) return;
