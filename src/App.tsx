@@ -15,7 +15,7 @@ import { CustomScenarioModal } from './components/menus/CustomScenarioModal';
 export const App: React.FC = () => {
   const gameStatus = useGameStore(state => state.status);
   const setScenario = useGameStore(state => state.setScenario);
-  const startCountdown = useGameStore(state => state.startCountdown);
+  const startGame = useGameStore(state => state.startGame);
   const resumeGame = useGameStore(state => state.resumeGame);
   const restartGame = useGameStore(state => state.restartGame);
   const exitToMenu = useGameStore(state => state.exitToMenu);
@@ -28,7 +28,12 @@ export const App: React.FC = () => {
 
   const handleSelectScenario = (scenario: any) => {
     setScenario(scenario);
-    startCountdown();
+    startGame();
+    // Request pointer lock synchronously on user click
+    const canvas = document.querySelector('canvas');
+    if (canvas && document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock();
+    }
   };
 
   const handleQuickPlay = () => {
@@ -45,7 +50,7 @@ export const App: React.FC = () => {
 
       {/* 1. IDLE STATE: Main Lobby or Scenario Browser */}
       {gameStatus === 'idle' && (
-        <div className="relative z-10 w-full h-full overflow-y-auto bg-cyber-bg/70 backdrop-blur-md flex flex-col justify-between py-6">
+        <div className="relative z-10 w-full h-full overflow-y-auto bg-cyber-bg/75 backdrop-blur-md flex flex-col justify-between py-6">
           {currentMenu === 'main' ? (
             <MainMenu
               onQuickPlay={handleQuickPlay}
@@ -73,17 +78,26 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* 2. COUNTDOWN OVERLAY */}
-      {gameStatus === 'countdown' && <CountdownOverlay />}
-
-      {/* 3. PLAYING IN-GAME HUD */}
+      {/* 2. PLAYING IN-GAME HUD */}
       {gameStatus === 'playing' && <GameHUD />}
 
-      {/* 4. PAUSED STATE */}
+      {/* 3. PAUSED STATE */}
       {gameStatus === 'paused' && (
         <PauseMenu
-          onResume={resumeGame}
-          onRestart={restartGame}
+          onResume={() => {
+            const canvas = document.querySelector('canvas');
+            if (canvas && document.pointerLockElement !== canvas) {
+              canvas.requestPointerLock();
+            }
+            resumeGame();
+          }}
+          onRestart={() => {
+            const canvas = document.querySelector('canvas');
+            if (canvas && document.pointerLockElement !== canvas) {
+              canvas.requestPointerLock();
+            }
+            restartGame();
+          }}
           onOpenBrowser={() => {
             exitToMenu();
             setCurrentMenu('browser');
@@ -95,10 +109,16 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* 5. POST-MATCH RESULTS SCREEN */}
+      {/* 4. POST-MATCH RESULTS SCREEN */}
       {gameStatus === 'results' && (
         <ResultScreen
-          onPlayAgain={startCountdown}
+          onPlayAgain={() => {
+            const canvas = document.querySelector('canvas');
+            if (canvas && document.pointerLockElement !== canvas) {
+              canvas.requestPointerLock();
+            }
+            startGame();
+          }}
           onOpenBrowser={() => {
             exitToMenu();
             setCurrentMenu('browser');

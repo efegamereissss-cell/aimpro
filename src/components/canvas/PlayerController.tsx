@@ -126,7 +126,7 @@ export const PlayerController: React.FC = () => {
   const handleFireRef = useRef(handleFire);
   handleFireRef.current = handleFire;
 
-  // Pointer Lock handling
+  // Pointer Lock request helper
   const requestLock = useCallback(() => {
     if (document.pointerLockElement !== gl.domElement) {
       pointerLockTimeRef.current = Date.now();
@@ -134,17 +134,22 @@ export const PlayerController: React.FC = () => {
     }
   }, [gl]);
 
-  // STABLE Event Listeners - Attached once to prevent any jitter / snapping
+  // STABLE Event Listeners
   useEffect(() => {
     const handlePointerLockChange = () => {
       pointerLockTimeRef.current = Date.now();
       mouseDeltaRef.current = { x: 0, y: 0 };
+      if (document.pointerLockElement !== gl.domElement) {
+        if (gameStatusRef.current === 'playing') {
+          pauseGame();
+        }
+      }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== gl.domElement) return;
 
-      // 1. Guard against Pointer Lock acquisition jump / recenter glitch
+      // 1. Ignore acquisition transition spikes
       if (Date.now() - pointerLockTimeRef.current < 100) {
         return;
       }
@@ -152,7 +157,7 @@ export const PlayerController: React.FC = () => {
       const deltaX = e.movementX || 0;
       const deltaY = e.movementY || 0;
 
-      // 2. Guard against anomalous hardware / browser recentering spikes (> 350px in single frame)
+      // 2. Ignore anomalous spikes
       if (Math.abs(deltaX) > 350 || Math.abs(deltaY) > 350) {
         return;
       }
@@ -269,7 +274,7 @@ export const PlayerController: React.FC = () => {
             break;
           }
         }
-      } else if (currentScenario.isAutomatic) {
+      } else if (activeScenario.isAutomatic) {
         handleFireRef.current();
       }
     }

@@ -1,50 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../../store/useGameStore';
-import { soundEngine } from '../../audio/SoundEngine';
+import { Target, MousePointer } from 'lucide-react';
 
 export const CountdownOverlay: React.FC = () => {
-  const [count, setCount] = useState(3);
   const startGame = useGameStore(state => state.startGame);
+  const scenario = useGameStore(state => state.activeScenario);
 
-  useEffect(() => {
-    soundEngine.playCountdown(false);
-
-    const timer1 = setTimeout(() => {
-      setCount(2);
-      soundEngine.playCountdown(false);
-    }, 1000);
-
-    const timer2 = setTimeout(() => {
-      setCount(1);
-      soundEngine.playCountdown(false);
-    }, 2000);
-
-    const timer3 = setTimeout(() => {
-      setCount(0); // GO!
-      soundEngine.playCountdown(true);
-    }, 3000);
-
-    const timer4 = setTimeout(() => {
-      startGame();
-    }, 3600);
-
-    return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      clearTimeout(timer4);
-    };
-  }, [startGame]);
+  const handleImmediateStart = () => {
+    const canvas = document.querySelector('canvas');
+    if (canvas && document.pointerLockElement !== canvas) {
+      canvas.requestPointerLock();
+    }
+    startGame();
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-none">
-      <div className="flex flex-col items-center justify-center animate-bounce">
-        <span className="text-8xl md:text-9xl font-black font-mono tracking-tighter text-cyber-primary drop-shadow-[0_0_35px_rgba(0,240,255,0.8)]">
-          {count > 0 ? count : 'GO!'}
-        </span>
-        <span className="mt-4 text-sm font-semibold tracking-widest uppercase text-cyber-muted">
-          Click screen to lock mouse
-        </span>
+    <div
+      onClick={handleImmediateStart}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/75 backdrop-blur-md cursor-pointer select-none"
+    >
+      <div className="flex flex-col items-center justify-center text-center space-y-4 p-8 glass-panel rounded-3xl border border-cyber-primary shadow-[0_0_40px_rgba(0,240,255,0.3)] animate-pulse">
+        <div className="w-16 h-16 rounded-2xl bg-cyber-primary/20 border border-cyber-primary flex items-center justify-center text-cyber-primary shadow-[0_0_20px_rgba(0,240,255,0.5)]">
+          <MousePointer className="w-8 h-8" />
+        </div>
+
+        <div>
+          <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tight">
+            {scenario.name}
+          </h2>
+          <p className="text-xs font-bold text-cyber-primary uppercase tracking-widest mt-1">
+            Click Anywhere to Lock Mouse & Start
+          </p>
+        </div>
+
+        <div className="px-6 py-2 rounded-xl bg-cyber-card text-xs font-mono font-bold text-cyber-muted border border-cyber-border">
+          {scenario.category} • {scenario.duration}s • {scenario.targetCount} Targets
+        </div>
       </div>
     </div>
   );
