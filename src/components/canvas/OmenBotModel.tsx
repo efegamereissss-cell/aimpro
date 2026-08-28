@@ -29,8 +29,8 @@ function preloadOmenModel() {
   const bodyMaterial = new THREE.MeshStandardMaterial({
     map: bodyDiffuse,
     normalMap: bodyNormal,
-    roughness: 0.45,
-    metalness: 0.65,
+    roughness: 0.5,
+    metalness: 0.6,
     side: THREE.DoubleSide
   });
 
@@ -48,22 +48,36 @@ function preloadOmenModel() {
   fbxLoader.load(
     '/models/omen_bot/source/New_Omen.fbx',
     fbx => {
+      // 1. Reset root FBX transforms
+      fbx.position.set(0, 0, 0);
+      fbx.rotation.set(0, 0, 0);
+      fbx.scale.set(1, 1, 1);
+
+      // 2. Reset and re-orient child mesh (Z-up in FBX -> Y-up in Three.js)
       fbx.traverse(child => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
           mesh.castShadow = true;
           mesh.receiveShadow = true;
-
-          // Assign body material to slot 0 and head material to slot 1
           mesh.material = [bodyMaterial, headMaterial];
-
-          // Re-orient FBX coordinates (Z-up to Three.js Y-up)
-          mesh.rotation.set(-Math.PI / 2, 0, Math.PI);
-          // Scale to authentic 1.85m human height
-          mesh.scale.set(0.88, 0.88, 0.88);
           mesh.position.set(0, 0, 0);
+          mesh.rotation.set(-Math.PI / 2, 0, Math.PI);
+          mesh.scale.set(1, 1, 1);
         }
       });
+
+      // 3. Normalize scale so total height is EXACTLY 1.85 meters (Valorant agent size)
+      const rawBox = new THREE.Box3().setFromObject(fbx);
+      const rawHeight = rawBox.max.y - rawBox.min.y;
+      const targetHeight = 1.85;
+      const scale = targetHeight / (rawHeight > 0 ? rawHeight : 2.1084);
+      fbx.scale.setScalar(scale);
+
+      // 4. Align feet perfectly to ground plane (Y = 0.00) and center on X=0, Z=0
+      const scaledBox = new THREE.Box3().setFromObject(fbx);
+      fbx.position.y = -scaledBox.min.y;
+      fbx.position.x = -(scaledBox.min.x + scaledBox.max.x) / 2;
+      fbx.position.z = -(scaledBox.min.z + scaledBox.max.z) / 2;
 
       const wrapper = new THREE.Group();
       wrapper.add(fbx);
@@ -104,10 +118,10 @@ export const OmenBotModel: React.FC<OmenBotModelProps> = ({ isHit = false, hitCo
       {model && <primitive object={model} />}
 
       {/* Iconic Omen Glowing Facial Slits Point Light */}
-      <pointLight position={[0, 1.68, 0.22]} color="#00f0ff" intensity={isHit ? 5.5 : 2.2} distance={3.5} />
+      <pointLight position={[0, 1.68, 0.22]} color="#00f0ff" intensity={isHit ? 5.0 : 2.0} distance={3.0} />
 
       {/* Torso Dark Energy Core Aura */}
-      <pointLight position={[0, 1.0, 0.15]} color="#7c3aed" intensity={1.2} distance={2.5} />
+      <pointLight position={[0, 1.0, 0.15]} color="#7c3aed" intensity={1.0} distance={2.0} />
     </group>
   );
 };

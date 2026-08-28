@@ -62,18 +62,18 @@ export const FPSScene: React.FC = () => {
           alpha: false,
           powerPreference: 'high-performance',
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.22
+          toneMappingExposure: 1.05
         }}
       >
         <DynamicValorantCameraManager />
 
-        {/* Soft Ambient Radiance */}
-        <ambientLight intensity={0.65} color="#e0e7ff" />
+        {/* Balanced Ambient Radiance */}
+        <ambientLight intensity={0.45} color="#e2e8f0" />
 
         {/* Primary Sun Directional Key Light with High-Performance Shadows */}
         <directionalLight
           position={[16, 26, 14]}
-          intensity={1.75}
+          intensity={1.35}
           color="#ffffff"
           castShadow={videoSettings.shadows}
           shadow-mapSize-width={2048}
@@ -90,15 +90,15 @@ export const FPSScene: React.FC = () => {
         {/* Secondary Cyber Cyan Rim Light */}
         <directionalLight
           position={[-18, 16, -10]}
-          intensity={0.65}
+          intensity={0.45}
           color="#00f0ff"
         />
 
         {/* Deep Ground Fill Light */}
         <directionalLight
           position={[0, -10, 0]}
-          intensity={0.22}
-          color="#1e1b4b"
+          intensity={0.15}
+          color="#0f172a"
         />
 
         <Suspense fallback={null}>

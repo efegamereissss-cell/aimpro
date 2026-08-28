@@ -1,32 +1,32 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 // Global Singleton Cache for Haven C-Site Model (0ms Instant Loading)
-let cachedHavenModel: THREE.Group | null = null;
+let cachedHavenGroup: THREE.Group | null = null;
 let isHavenLoading = false;
 const loadingCallbacks: Array<(model: THREE.Group) => void> = [];
 
-// Pre-create shared PBR Materials for all 67 material slots (Eliminates 1 FPS lag & White Screen)
+// Rich, High-Contrast Valorant Haven PBR Materials (Zero White Glare)
 const HAVEN_MATERIALS = {
-  floor_stone: new THREE.MeshStandardMaterial({ color: '#2b3544', roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide }),
-  floor_light: new THREE.MeshStandardMaterial({ color: '#384659', roughness: 0.75, metalness: 0.1, side: THREE.DoubleSide }),
-  grass: new THREE.MeshStandardMaterial({ color: '#2d4734', roughness: 0.9, metalness: 0.05, side: THREE.DoubleSide }),
-  wood_box: new THREE.MeshStandardMaterial({ color: '#8a5a36', roughness: 0.65, metalness: 0.05, side: THREE.DoubleSide }),
-  wood_light: new THREE.MeshStandardMaterial({ color: '#a6724a', roughness: 0.6, metalness: 0.05, side: THREE.DoubleSide }),
-  wood_dark: new THREE.MeshStandardMaterial({ color: '#4a2f1c', roughness: 0.7, metalness: 0.1, side: THREE.DoubleSide }),
-  wall_temple: new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.8, metalness: 0.05, side: THREE.DoubleSide }),
-  wall_beige: new THREE.MeshStandardMaterial({ color: '#5b677a', roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }),
-  wall_blue: new THREE.MeshStandardMaterial({ color: '#334f70', roughness: 0.75, metalness: 0.1, side: THREE.DoubleSide }),
-  roof: new THREE.MeshStandardMaterial({ color: '#7c3322', roughness: 0.6, metalness: 0.1, side: THREE.DoubleSide }),
-  radianite_cyan: new THREE.MeshStandardMaterial({ color: '#00f0ff', emissive: '#00f0ff', emissiveIntensity: 1.2, roughness: 0.2, metalness: 0.8, side: THREE.DoubleSide }),
-  radianite_green: new THREE.MeshStandardMaterial({ color: '#10b981', emissive: '#10b981', emissiveIntensity: 1.0, roughness: 0.25, metalness: 0.7, side: THREE.DoubleSide }),
-  box_gray: new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide }),
-  stone_pillar: new THREE.MeshStandardMaterial({ color: '#3a4454', roughness: 0.85, metalness: 0.1, side: THREE.DoubleSide }),
-  tree_trunk: new THREE.MeshStandardMaterial({ color: '#453022', roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }),
-  tree_leaves: new THREE.MeshStandardMaterial({ color: '#365c3b', roughness: 0.9, metalness: 0.05, side: THREE.DoubleSide }),
-  rope: new THREE.MeshStandardMaterial({ color: '#967d5e', roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide }),
-  default_neutral: new THREE.MeshStandardMaterial({ color: '#3f4d61', roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide })
+  floor_stone: new THREE.MeshStandardMaterial({ color: '#1a222d', roughness: 0.85, metalness: 0.1, side: THREE.DoubleSide }),
+  floor_light: new THREE.MeshStandardMaterial({ color: '#25303f', roughness: 0.8, metalness: 0.1, side: THREE.DoubleSide }),
+  grass: new THREE.MeshStandardMaterial({ color: '#1a2e20', roughness: 0.9, metalness: 0.05, side: THREE.DoubleSide }),
+  wood_box: new THREE.MeshStandardMaterial({ color: '#543820', roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide }),
+  wood_light: new THREE.MeshStandardMaterial({ color: '#6e492b', roughness: 0.65, metalness: 0.05, side: THREE.DoubleSide }),
+  wood_dark: new THREE.MeshStandardMaterial({ color: '#332014', roughness: 0.75, metalness: 0.1, side: THREE.DoubleSide }),
+  wall_temple: new THREE.MeshStandardMaterial({ color: '#2c3545', roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }),
+  wall_beige: new THREE.MeshStandardMaterial({ color: '#3a4454', roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }),
+  wall_blue: new THREE.MeshStandardMaterial({ color: '#20334a', roughness: 0.75, metalness: 0.1, side: THREE.DoubleSide }),
+  roof: new THREE.MeshStandardMaterial({ color: '#4a1b12', roughness: 0.65, metalness: 0.1, side: THREE.DoubleSide }),
+  radianite_cyan: new THREE.MeshStandardMaterial({ color: '#00f0ff', emissive: '#00f0ff', emissiveIntensity: 0.8, roughness: 0.2, metalness: 0.8, side: THREE.DoubleSide }),
+  radianite_green: new THREE.MeshStandardMaterial({ color: '#10b981', emissive: '#10b981', emissiveIntensity: 0.7, roughness: 0.25, metalness: 0.7, side: THREE.DoubleSide }),
+  box_gray: new THREE.MeshStandardMaterial({ color: '#1e2836', roughness: 0.6, metalness: 0.3, side: THREE.DoubleSide }),
+  stone_pillar: new THREE.MeshStandardMaterial({ color: '#26303d', roughness: 0.85, metalness: 0.1, side: THREE.DoubleSide }),
+  tree_trunk: new THREE.MeshStandardMaterial({ color: '#2e1e14', roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide }),
+  tree_leaves: new THREE.MeshStandardMaterial({ color: '#1f3824', roughness: 0.9, metalness: 0.05, side: THREE.DoubleSide }),
+  rope: new THREE.MeshStandardMaterial({ color: '#61503c', roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide }),
+  default_neutral: new THREE.MeshStandardMaterial({ color: '#252e3b', roughness: 0.85, metalness: 0.05, side: THREE.DoubleSide })
 };
 
 function getMaterialForName(name: string): THREE.MeshStandardMaterial {
@@ -52,7 +52,7 @@ function getMaterialForName(name: string): THREE.MeshStandardMaterial {
 }
 
 function preloadHavenModel() {
-  if (cachedHavenModel || isHavenLoading) return;
+  if (cachedHavenGroup || isHavenLoading) return;
   isHavenLoading = true;
 
   const fbxLoader = new FBXLoader();
@@ -61,14 +61,14 @@ function preloadHavenModel() {
     fbx => {
       // 1. Scale from Maya cm to Three.js meters (0.01 factor)
       fbx.scale.set(0.01, 0.01, 0.01);
-      // Center C-Site courtyard and plat in front of player
+      // Center C-Site courtyard and plat directly in front of player
       fbx.position.set(25.89, 0, -4.16);
 
-      // 2. Overhaul materials and optimize rendering (Disable dynamic shadow casting on static map geometry for 240+ FPS)
+      // 2. Assign rich tactical materials and optimize performance
       fbx.traverse(child => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
-          mesh.castShadow = false; // Static map does NOT need dynamic shadow cascade computation
+          mesh.castShadow = false;
           mesh.receiveShadow = true;
 
           const matName = (mesh.material && !Array.isArray(mesh.material)) ? mesh.material.name : mesh.name;
@@ -79,7 +79,7 @@ function preloadHavenModel() {
       const wrapperGroup = new THREE.Group();
       wrapperGroup.add(fbx);
 
-      cachedHavenModel = wrapperGroup;
+      cachedHavenGroup = wrapperGroup;
       isHavenLoading = false;
       loadingCallbacks.forEach(cb => cb(wrapperGroup.clone()));
       loadingCallbacks.length = 0;
@@ -97,11 +97,11 @@ if (typeof window !== 'undefined') {
 }
 
 export const HavenCSiteMap: React.FC = () => {
-  const [model, setModel] = useState<THREE.Group | null>(() => (cachedHavenModel ? cachedHavenModel.clone() : null));
+  const [model, setModel] = useState<THREE.Group | null>(() => (cachedHavenGroup ? cachedHavenGroup.clone() : null));
 
   useEffect(() => {
-    if (cachedHavenModel) {
-      setModel(cachedHavenModel.clone());
+    if (cachedHavenGroup) {
+      setModel(cachedHavenGroup.clone());
     } else {
       loadingCallbacks.push(loadedModel => {
         setModel(loadedModel);
@@ -113,7 +113,7 @@ export const HavenCSiteMap: React.FC = () => {
   return (
     <group position={[0, 0, 0]}>
       {/* Valorant Haven Soft Sky Fog */}
-      <fog attach="fog" args={['#0f172a', 28, 90]} />
+      <fog attach="fog" args={['#090d14', 30, 95]} />
 
       {/* Main Valorant Haven C-Site 3D Geometry */}
       {model && <primitive object={model} />}
@@ -121,13 +121,13 @@ export const HavenCSiteMap: React.FC = () => {
       {/* Solid Ground Floor Baseline */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[120, 120]} />
-        <meshStandardMaterial color="#222c38" roughness={0.8} metalness={0.1} />
+        <meshStandardMaterial color="#131922" roughness={0.85} metalness={0.1} />
       </mesh>
 
       {/* C-Site Courtyard Ground Mat */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, -12]} receiveShadow>
         <planeGeometry args={[36, 26]} />
-        <meshStandardMaterial color="#1a2330" roughness={0.85} metalness={0.05} />
+        <meshStandardMaterial color="#0f151c" roughness={0.9} metalness={0.05} />
       </mesh>
 
       {/* Distance Floor Markers */}
@@ -135,34 +135,20 @@ export const HavenCSiteMap: React.FC = () => {
         <group key={z} position={[0, 0.012, z]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[30, 0.06]} />
-            <meshBasicMaterial color="#00f0ff" transparent opacity={0.35} />
+            <meshBasicMaterial color="#00f0ff" transparent opacity={0.3} />
           </mesh>
         </group>
       ))}
 
-      {/* Radianite Energy Beacons at C-Site Plat */}
+      {/* Radianite Energy Boxes at C-Site Plat */}
       <mesh position={[-7, 1.2, -16]} castShadow>
         <boxGeometry args={[1.6, 2.4, 1.6]} />
-        <meshStandardMaterial color="#00f0ff" emissive="#00f0ff" emissiveIntensity={1.4} roughness={0.2} metalness={0.8} />
+        <meshStandardMaterial color="#00f0ff" emissive="#00f0ff" emissiveIntensity={1.0} roughness={0.2} metalness={0.8} />
       </mesh>
       <mesh position={[7, 1.2, -16]} castShadow>
         <boxGeometry args={[1.6, 2.4, 1.6]} />
-        <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={1.2} roughness={0.25} metalness={0.7} />
+        <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={0.8} roughness={0.25} metalness={0.7} />
       </mesh>
-
-      {/* Haven Tactical Sun Key Lighting */}
-      <directionalLight
-        position={[18, 32, 14]}
-        intensity={1.8}
-        color="#ffffff"
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-bias={-0.0001}
-      />
-
-      {/* Haven Sky Radiance Fill Light */}
-      <ambientLight intensity={0.65} color="#cbd5e1" />
     </group>
   );
 };
