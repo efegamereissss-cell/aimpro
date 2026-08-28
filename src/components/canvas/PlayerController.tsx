@@ -288,7 +288,9 @@ export const PlayerController: React.FC = () => {
 
       // Weapon Switching
       if (e.code === 'Digit1' || e.code === 'Numpad1' || e.key === '1') {
-        setWeaponSlot('vandal');
+        const sc = scenarioRef.current;
+        const targetSlot = sc.weaponType === 'pistol' ? 'sheriff' : 'vandal';
+        setWeaponSlot(targetSlot);
         soundEngine.playWeaponInspect();
       }
       if (e.code === 'Digit2' || e.code === 'Numpad2' || e.key === '2') {

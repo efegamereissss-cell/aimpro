@@ -7,8 +7,17 @@ import { ActiveTarget } from '../../types/game';
 
 export const TargetManager: React.FC = () => {
   const activeTargets = useGameStore(state => state.activeTargets);
+  const tickGame = useGameStore(state => state.tickGame);
+  const gameStatus = useGameStore(state => state.status);
   const targetColorSetting = useSettingsStore(state => state.settings.video.targetColor);
   const targetHitColorSetting = useSettingsStore(state => state.settings.video.targetHitColor);
+
+  // Main game loop tick: drives target respawning, movement, tracer decay, and timer countdown
+  useFrame((_, delta) => {
+    if (gameStatus === 'playing') {
+      tickGame(Math.min(delta, 0.05));
+    }
+  });
 
   return (
     <group>

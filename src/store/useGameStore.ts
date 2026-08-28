@@ -75,8 +75,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
+    const defaultSlot = scenario.weaponType === 'pistol' ? 'sheriff' : 'vandal';
     set({
       activeScenario: scenario,
+      activeWeaponSlot: defaultSlot,
       timeRemaining: scenario.duration,
       status: 'idle',
       activeTargets: [],
@@ -100,8 +102,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   startGame: () => {
     const scenario = get().activeScenario;
+    const defaultSlot = scenario.weaponType === 'pistol' ? 'sheriff' : 'vandal';
     set({
       status: 'playing',
+      activeWeaponSlot: defaultSlot,
       timeRemaining: scenario.duration,
       score: 0,
       shotsFired: 0,
