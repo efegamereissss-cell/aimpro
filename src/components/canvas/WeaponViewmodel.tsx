@@ -39,10 +39,10 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
 
   const weaponType = scenario.weaponType;
 
-  // Listen for F key for inspect
+  // Listen for F key for inspect (can re-trigger/loop infinitely)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'KeyF' && !isInspectingRef.current) {
+      if (e.code === 'KeyF') {
         isInspectingRef.current = true;
         inspectProgressRef.current = 0;
         if (activeWeaponSlot === 'knife') {
@@ -62,7 +62,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     const t = state.clock.getElapsedTime();
 
     // 1. Dynamic RGX 11z Pro RGB Chroma Color Shift
-    const chromaHue = (t * 0.35) % 1.0;
+    const chromaHue = (t * 0.4) % 1.0;
     const chromaRgb = new THREE.Color().setHSL(chromaHue, 1.0, 0.55);
     setRgbColor('#' + chromaRgb.getHexString());
 
@@ -107,22 +107,65 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
       }
     }
 
-    // 5. Inspect Animation (F Key)
-    let inspectRotZ = 0;
+    // 5. Valorant RGX 11z Pro Karambit Inspect Animation (Exact 3-Phase Choreography)
+    let inspectRotX = 0;
     let inspectRotY = 0;
+    let inspectRotZ = 0;
+    let inspectOffsetPos = new THREE.Vector3(0, 0, 0);
     let karambitSpinAngle = 0;
 
     if (isInspectingRef.current) {
-      const speed = activeWeaponSlot === 'knife' ? 9.5 : 2.2;
-      inspectProgressRef.current += delta * speed;
-
       if (activeWeaponSlot === 'knife') {
-        karambitSpinAngle = inspectProgressRef.current;
-        if (inspectProgressRef.current >= Math.PI * 4) {
+        const totalDuration = 2.4; // 2.4 seconds full Valorant inspect sequence
+        inspectProgressRef.current += delta / totalDuration;
+        const p = inspectProgressRef.current;
+
+        if (p >= 1.0) {
           isInspectingRef.current = false;
           inspectProgressRef.current = 0;
+        } else {
+          // Phase 1: Lift & Ready (0.0 to 0.15)
+          if (p < 0.15) {
+            const ease = Math.sin((p / 0.15) * (Math.PI / 2));
+            inspectOffsetPos.set(-0.03 * ease, 0.04 * ease, 0.03 * ease);
+            inspectRotX = 0.15 * ease;
+            inspectRotY = -0.1 * ease;
+          }
+          // Phase 2: Hypnotic Multi-Axis 360° Finger Spin with 3D Precession (0.15 to 0.82)
+          else if (p < 0.82) {
+            const spinP = (p - 0.15) / 0.67;
+            const fullSpins = 5.0; // 5 full 360-degree rotations
+            karambitSpinAngle = spinP * Math.PI * 2 * fullSpins;
+
+            // 3D Conical wobble precession around the finger ring
+            inspectOffsetPos.set(
+              -0.03 + Math.sin(karambitSpinAngle * 0.5) * 0.015,
+              0.04 + Math.cos(karambitSpinAngle * 0.5) * 0.012,
+              0.03
+            );
+            inspectRotX = Math.sin(karambitSpinAngle) * 0.14;
+            inspectRotY = -0.1 + Math.cos(karambitSpinAngle) * 0.12;
+            inspectRotZ = Math.sin(karambitSpinAngle * 0.5) * 0.08;
+          }
+          // Phase 3: Deceleration, Thumb Flip & Snap Catch into Reverse Grip (0.82 to 1.0)
+          else {
+            const catchP = (p - 0.82) / 0.18;
+            const easeOut = 1.0 - Math.pow(1.0 - catchP, 3);
+            karambitSpinAngle = Math.PI * 2 * 5.0 + Math.sin(catchP * Math.PI) * 0.4;
+
+            inspectOffsetPos.set(
+              -0.03 * (1.0 - easeOut),
+              0.04 * (1.0 - easeOut),
+              0.03 * (1.0 - easeOut)
+            );
+            inspectRotX = Math.sin((1.0 - catchP) * Math.PI) * 0.12;
+            inspectRotY = -0.1 * (1.0 - easeOut);
+          }
         }
       } else {
+        // Gun Inspect
+        const speed = 2.2;
+        inspectProgressRef.current += delta * speed;
         if (inspectProgressRef.current >= Math.PI * 2) {
           isInspectingRef.current = false;
           inspectProgressRef.current = 0;
@@ -142,7 +185,11 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     const gunHipfirePos = new THREE.Vector3(0.24, -0.21, -0.48);
     const gunAdsPos = new THREE.Vector3(0.0, -0.148, -0.38);
     // Calibrated authentic Valorant first-person knife placement
-    const knifePos = new THREE.Vector3(0.23, -0.22, -0.42 - slashPosZ);
+    const knifePos = new THREE.Vector3(
+      0.23 + inspectOffsetPos.x,
+      -0.22 + inspectOffsetPos.y,
+      -0.42 - slashPosZ + inspectOffsetPos.z
+    );
     const basePos = activeWeaponSlot === 'knife' ? knifePos : (isADS ? gunAdsPos : gunHipfirePos);
 
     const localPos = new THREE.Vector3(
@@ -154,7 +201,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     groupRef.current.position.copy(worldPos);
 
     groupRef.current.quaternion.copy(camera.quaternion);
-    groupRef.current.rotateX(recoilRef.current.pitch + swayY * 0.4 + slashRotX);
+    groupRef.current.rotateX(recoilRef.current.pitch + swayY * 0.4 + slashRotX + inspectRotX);
     groupRef.current.rotateY(swayX * 0.6 + inspectRotY);
     groupRef.current.rotateZ(swayX * 1.0 + inspectRotZ);
 
