@@ -1,5 +1,5 @@
-import React, { Suspense } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { Suspense, useEffect } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Arena } from './Arena';
 import { BhopParkourMap } from './BhopParkourMap';
@@ -9,27 +9,53 @@ import { ParticleSystem } from './ParticleSystem';
 import { FloatingText3D } from './FloatingText3D';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useGameStore } from '../../store/useGameStore';
-import { getEffectiveVerticalFov } from '../../utils/sensitivity';
+
+/**
+ * Ensures 1:1 Pixel-Perfect Valorant 103° Horizontal FOV projection
+ * dynamically matched to real-time viewport aspect ratio.
+ */
+const DynamicValorantCameraManager: React.FC = () => {
+  const { camera, size } = useThree();
+  const fovSetting = useSettingsStore(state => state.settings.video.fov);
+
+  useFrame(() => {
+    if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera && size.height > 0) {
+      const pCam = camera as THREE.PerspectiveCamera;
+      const currentAspect = size.width / size.height;
+      const targetHFov = fovSetting || 103; // Valorant 103° Hor+
+      
+      const hRad = (targetHFov * Math.PI) / 180;
+      const vRad = 2 * Math.atan(Math.tan(hRad / 2) / currentAspect);
+      const vFovDeg = (vRad * 180) / Math.PI;
+
+      if (Math.abs(pCam.fov - vFovDeg) > 0.005 || Math.abs(pCam.aspect - currentAspect) > 0.005) {
+        pCam.fov = vFovDeg;
+        pCam.aspect = currentAspect;
+        pCam.updateProjectionMatrix();
+      }
+    }
+  });
+
+  return null;
+};
 
 export const FPSScene: React.FC = () => {
   const videoSettings = useSettingsStore(state => state.settings.video);
   const activeScenario = useGameStore(state => state.activeScenario);
-
-  const effectiveFov = getEffectiveVerticalFov(videoSettings.fov);
   const isBhopMap = activeScenario.id.includes('bhop');
 
   return (
     <div className="w-full h-full relative select-none bg-[#070a10]">
       <Canvas
         camera={{
-          fov: effectiveFov,
+          fov: 70.5328, // Exact Valorant 103° Horizontal FOV at 16:9
           near: 0.05,
           far: 140,
           position: [0, 2.7, 0]
         }}
-        dpr={[1, 2]} // Crisp retina DPR without pixelation
+        dpr={[1, 2]}
         shadows={{
-          type: THREE.PCFSoftShadowMap // Ultra smooth soft contact shadows
+          type: THREE.PCFSoftShadowMap
         }}
         gl={{
           antialias: true,
@@ -39,6 +65,8 @@ export const FPSScene: React.FC = () => {
           toneMappingExposure: 1.22
         }}
       >
+        <DynamicValorantCameraManager />
+
         {/* Soft Ambient Radiance */}
         <ambientLight intensity={0.65} color="#e0e7ff" />
 
