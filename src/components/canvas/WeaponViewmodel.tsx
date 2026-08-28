@@ -6,6 +6,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { soundEngine } from '../../audio/SoundEngine';
 import { RGXKarambitModel } from './RGXKarambitModel';
 import { ArcaneSheriffModel } from './ArcaneSheriffModel';
+import { PreludeVandalModel } from './PreludeVandalModel';
 
 interface WeaponViewmodelProps {
   isFiring: boolean;
@@ -86,7 +87,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         isSlashingRef.current = true;
         slashProgressRef.current = 0;
       } else {
-        // Heavy Magnum kick for Arcane Sheriff / Pistol
+        // Heavy kick for Arcane Sheriff & Prelude Vandal
         const kickZ = weaponType === 'sniper' ? 0.14 : (weaponType === 'pistol' ? 0.08 : 0.07);
         const kickPitch = weaponType === 'sniper' ? 0.16 : (weaponType === 'pistol' ? 0.12 : 0.08);
         recoilRef.current.z = Math.min(recoilRef.current.z + kickZ, 0.18);
@@ -110,7 +111,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
       }
     }
 
-    // 5. Inspect Animations (Valorant RGX Karambit vs Arcane Sheriff vs Rifle)
+    // 5. Inspect Animations (Valorant RGX Karambit vs Arcane Sheriff vs Prelude Vandal)
     let inspectRotX = 0;
     let inspectRotY = 0;
     let inspectRotZ = 0;
@@ -171,14 +172,13 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           isInspectingRef.current = false;
           inspectProgressRef.current = 0;
         } else {
-          // Trigger-guard 360° spin & tilt
           if (p < 0.45) {
             const spinP = p / 0.45;
-            sheriffSpinAngle = spinP * Math.PI * 2; // 360° forward cowboy flip
+            sheriffSpinAngle = spinP * Math.PI * 2;
             inspectOffsetPos.set(-0.03 * Math.sin(spinP * Math.PI), 0.04 * Math.sin(spinP * Math.PI), 0);
           } else if (p < 0.8) {
             const tiltP = (p - 0.45) / 0.35;
-            inspectRotY = Math.sin(tiltP * Math.PI) * 0.35; // Tilt cylinder to camera
+            inspectRotY = Math.sin(tiltP * Math.PI) * 0.35;
             inspectRotX = Math.sin(tiltP * Math.PI) * -0.15;
           } else {
             const endP = (p - 0.8) / 0.2;
@@ -186,7 +186,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           }
         }
       } else {
-        // Gun Inspect
+        // Prelude Vandal / Primary Weapon Inspect
         const speed = 2.2;
         inspectProgressRef.current += delta * speed;
         if (inspectProgressRef.current >= Math.PI * 2) {
@@ -194,8 +194,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           inspectProgressRef.current = 0;
         } else {
           const p = inspectProgressRef.current;
-          inspectRotZ = Math.sin(p) * 0.6;
-          inspectRotY = Math.sin(p * 0.5) * 0.5;
+          inspectRotZ = Math.sin(p) * 0.55;
+          inspectRotY = Math.sin(p * 0.5) * 0.45;
         }
       }
     }
@@ -208,9 +208,9 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
     }
 
     // 6. Target Local Position
-    const gunHipfirePos = new THREE.Vector3(0.24, -0.21, -0.48);
+    const vandalHipfirePos = new THREE.Vector3(0.23, -0.21, -0.46);
+    const vandalAdsPos = new THREE.Vector3(0.0, -0.152, -0.38);
     const sheriffHipfirePos = new THREE.Vector3(0.23, -0.21, -0.44);
-    const gunAdsPos = new THREE.Vector3(0.0, -0.148, -0.38);
     const sheriffAdsPos = new THREE.Vector3(0.0, -0.142, -0.36);
 
     const knifePos = new THREE.Vector3(
@@ -219,7 +219,7 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
       -0.42 - slashPosZ + inspectOffsetPos.z
     );
 
-    let activeBasePos = gunHipfirePos;
+    let activeBasePos = vandalHipfirePos;
     if (activeWeaponSlot === 'knife') {
       activeBasePos = knifePos;
     } else if (weaponType === 'pistol') {
@@ -229,7 +229,11 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
         sheriffHipfirePos.z + inspectOffsetPos.z
       );
     } else {
-      activeBasePos = isADS ? gunAdsPos : gunHipfirePos;
+      activeBasePos = isADS ? vandalAdsPos : new THREE.Vector3(
+        vandalHipfirePos.x + inspectOffsetPos.x,
+        vandalHipfirePos.y + inspectOffsetPos.y,
+        vandalHipfirePos.z + inspectOffsetPos.z
+      );
     }
 
     const localPos = new THREE.Vector3(
@@ -286,49 +290,10 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
             </group>
           )}
 
-          {/* WEAPON TYPE: ASSAULT RIFLE (VANDAL / CARBINE) */}
+          {/* WEAPON TYPE: VALORANT PRELUDE TO CHAOS VANDAL (BLUE) */}
           {weaponType === 'rifle' && (
-            <group>
-              <mesh position={[0, 0, 0]} castShadow>
-                <boxGeometry args={[0.065, 0.085, 0.42]} />
-                <meshStandardMaterial color="#0f172a" roughness={0.25} metalness={0.88} />
-              </mesh>
-              <mesh position={[0, 0.052, 0.03]}>
-                <boxGeometry args={[0.05, 0.02, 0.44]} />
-                <meshStandardMaterial color="#1e293b" roughness={0.2} metalness={0.92} />
-              </mesh>
-              <mesh position={[0, 0.035, 0.32]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.018, 0.018, 0.24, 16]} />
-                <meshStandardMaterial color="#334155" roughness={0.15} metalness={0.95} />
-              </mesh>
-              <mesh position={[0, 0.035, 0.45]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.024, 0.02, 0.06, 8]} />
-                <meshStandardMaterial color="#020617" roughness={0.3} metalness={0.9} />
-              </mesh>
-              <mesh position={[0, -0.09, 0.06]} rotation={[0.25, 0, 0]}>
-                <boxGeometry args={[0.045, 0.16, 0.08]} />
-                <meshStandardMaterial color="#020617" roughness={0.4} metalness={0.8} />
-              </mesh>
-              <mesh position={[0, -0.09, -0.1]} rotation={[-0.32, 0, 0]}>
-                <boxGeometry args={[0.048, 0.14, 0.065]} />
-                <meshStandardMaterial color="#0f172a" roughness={0.8} metalness={0.2} />
-              </mesh>
-              <mesh position={[0, -0.01, -0.28]}>
-                <boxGeometry args={[0.05, 0.08, 0.18]} />
-                <meshStandardMaterial color="#0f172a" roughness={0.6} metalness={0.3} />
-              </mesh>
-              <mesh position={[0, 0.082, 0.04]}>
-                <boxGeometry args={[0.04, 0.038, 0.06]} />
-                <meshStandardMaterial color="#020617" roughness={0.3} metalness={0.9} />
-              </mesh>
-              <mesh position={[0, 0.088, 0.04]}>
-                <planeGeometry args={[0.028, 0.028]} />
-                <meshBasicMaterial color={neonAccent} transparent opacity={0.7} side={THREE.DoubleSide} />
-              </mesh>
-              <mesh position={[0, 0.005, 0.02]}>
-                <boxGeometry args={[0.068, 0.015, 0.28]} />
-                <meshBasicMaterial color={neonAccent} />
-              </mesh>
+            <group position={[0, 0, 0]} rotation={[0.03, 0.05, -0.02]}>
+              <PreludeVandalModel />
             </group>
           )}
 
@@ -397,8 +362,8 @@ export const WeaponViewmodel: React.FC<WeaponViewmodelProps> = ({
           {/* Dynamic Muzzle Flash Point Light */}
           <pointLight
             ref={muzzleFlashRef}
-            position={[0, 0.035, 0.45]}
-            color={neonAccent}
+            position={[0, 0.035, 0.52]}
+            color="#00f0ff"
             distance={8}
             intensity={0}
           />
