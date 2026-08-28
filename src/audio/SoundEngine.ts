@@ -1,7 +1,7 @@
 /**
  * AIMPRO 2.0 Next-Gen Procedural Web Audio API Synthesizer
- * Zero-latency polyphonic synthesis with 3D spatial panning, harmonic crystal chimes,
- * weapon mechanical layers, dynamic combo pitch scaling, and RGX Karambit slash audio.
+ * Zero-latency polyphonic synthesis with 3D spatial panning, multi-layered premium "Tok" punch,
+ * harmonic crystal chimes, weapon mechanical layers, dynamic combo pitch scaling, and RGX Karambit audio.
  */
 class ProceduralSoundEngine {
   private ctx: AudioContext | null = null;
@@ -9,9 +9,9 @@ class ProceduralSoundEngine {
 
   public masterVolume: number = 0.8;
   public gunVolume: number = 0.55;
-  public hitVolume: number = 0.85;
+  public hitVolume: number = 0.9;
   public missVolume: number = 0.25;
-  public baseHitFrequency: number = 880; // A5
+  public baseHitFrequency: number = 740; // Warm, punchy fundamental frequency
   public preset: 'aimlab_crystal' | 'kovaak_bell' | 'quake_ding' | 'cyber_plink' = 'aimlab_crystal';
   public comboPitchEscalation: boolean = true;
 
@@ -38,21 +38,25 @@ class ProceduralSoundEngine {
     }
   }
 
+  /**
+   * Premium Deep Punchy "Tok" Target Hit Synthesis
+   * Triple-layered acoustic sound: Sub Punch (Thump) + Crisp Transient Pop + Harmonic Resonance Tail
+   */
   public playHitSound(comboStreak: number = 0, isHeadshot: boolean = false, panX: number = 0) {
     try {
       this.init();
       if (!this.ctx || !this.masterGain) return;
 
       const now = this.ctx.currentTime;
-      let freq = this.baseHitFrequency;
+      let fundamental = this.baseHitFrequency;
 
       if (this.comboPitchEscalation && comboStreak > 0) {
-        const semitones = Math.min(comboStreak, 24);
-        freq = freq * Math.pow(2, semitones / 12);
+        const semitones = Math.min(comboStreak, 18);
+        fundamental = fundamental * Math.pow(2, semitones / 12);
       }
 
       if (isHeadshot) {
-        freq *= 1.498;
+        fundamental *= 1.334; // Major third pitch boost on headshot
       }
 
       const panner = this.ctx.createStereoPanner ? this.ctx.createStereoPanner() : null;
@@ -60,84 +64,73 @@ class ProceduralSoundEngine {
         panner.pan.setValueAtTime(Math.max(-0.8, Math.min(0.8, panX / 10)), now);
       }
 
-      const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(this.hitVolume * 0.45, now);
+      // Master Hit Bus Gain
+      const hitBus = this.ctx.createGain();
+      hitBus.gain.setValueAtTime(this.hitVolume, now);
 
-      if (this.preset === 'aimlab_crystal') {
-        const osc1 = this.ctx.createOscillator();
-        const osc2 = this.ctx.createOscillator();
-        osc1.type = 'sine';
-        osc2.type = 'triangle';
+      // =========================================================================
+      // 1. PUNCHY SUB-THUMP BODY LAYER (Tok / Punch)
+      // Fast sine pitch drop from 320Hz -> 65Hz for that rich, deep chest impact
+      // =========================================================================
+      const thudOsc = this.ctx.createOscillator();
+      const thudGain = this.ctx.createGain();
+      thudOsc.type = 'sine';
 
-        osc1.frequency.setValueAtTime(freq, now);
-        osc1.frequency.exponentialRampToValueAtTime(freq * 0.96, now + 0.09);
+      const startThudFreq = isHeadshot ? 380 : 290;
+      const endThudFreq = isHeadshot ? 85 : 60;
+      thudOsc.frequency.setValueAtTime(startThudFreq, now);
+      thudOsc.frequency.exponentialRampToValueAtTime(endThudFreq, now + 0.055);
 
-        osc2.frequency.setValueAtTime(freq * 2.01, now);
-        osc2.frequency.exponentialRampToValueAtTime(freq * 1.95, now + 0.06);
+      thudGain.gain.setValueAtTime(0.65, now);
+      thudGain.gain.exponentialRampToValueAtTime(0.001, now + (isHeadshot ? 0.075 : 0.06));
 
-        const subGain = this.ctx.createGain();
-        subGain.gain.setValueAtTime(this.hitVolume * 0.25, now);
-        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+      thudOsc.connect(thudGain);
+      thudGain.connect(hitBus);
+      thudOsc.start(now);
+      thudOsc.stop(now + 0.08);
 
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + (isHeadshot ? 0.16 : 0.12));
+      // =========================================================================
+      // 2. CRISP ACOUSTIC TRANSIENT SNAP (Pinpoint Click / Pop)
+      // Bandpassed high-frequency burst for razor-sharp click feedback
+      // =========================================================================
+      const snapOsc = this.ctx.createOscillator();
+      const snapGain = this.ctx.createGain();
+      snapOsc.type = 'triangle';
+      snapOsc.frequency.setValueAtTime(1450, now);
+      snapOsc.frequency.exponentialRampToValueAtTime(450, now + 0.025);
 
-        osc1.connect(gain);
-        osc2.connect(subGain);
-        subGain.connect(gain);
+      snapGain.gain.setValueAtTime(0.4, now);
+      snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
 
-        if (panner) {
-          gain.connect(panner);
-          panner.connect(this.masterGain);
-        } else {
-          gain.connect(this.masterGain);
-        }
+      snapOsc.connect(snapGain);
+      snapGain.connect(hitBus);
+      snapOsc.start(now);
+      snapOsc.stop(now + 0.04);
 
-        osc1.start(now);
-        osc2.start(now);
-        osc1.stop(now + 0.18);
-        osc2.stop(now + 0.18);
-      } else if (this.preset === 'kovaak_bell') {
-        const osc1 = this.ctx.createOscillator();
-        const osc2 = this.ctx.createOscillator();
-        osc1.type = 'triangle';
-        osc2.type = 'sine';
-        osc1.frequency.setValueAtTime(freq, now);
-        osc2.frequency.setValueAtTime(freq * 2.76, now);
+      // =========================================================================
+      // 3. PREMIUM HARMONIC OVERTONE TAIL (Musical Sheen / Feedback)
+      // Pure sine fundamental with soft decay
+      // =========================================================================
+      const toneOsc = this.ctx.createOscillator();
+      const toneGain = this.ctx.createGain();
+      toneOsc.type = 'sine';
+      toneOsc.frequency.setValueAtTime(fundamental, now);
+      toneOsc.frequency.exponentialRampToValueAtTime(fundamental * 0.98, now + 0.09);
 
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      toneGain.gain.setValueAtTime(0.35, now);
+      toneGain.gain.exponentialRampToValueAtTime(0.0001, now + (isHeadshot ? 0.15 : 0.1));
 
-        osc1.connect(gain);
-        osc2.connect(gain);
-        if (panner) {
-          gain.connect(panner);
-          panner.connect(this.masterGain);
-        } else {
-          gain.connect(this.masterGain);
-        }
+      toneOsc.connect(toneGain);
+      toneGain.connect(hitBus);
+      toneOsc.start(now);
+      toneOsc.stop(now + 0.16);
 
-        osc1.start(now);
-        osc2.start(now);
-        osc1.stop(now + 0.23);
-        osc2.stop(now + 0.23);
+      // Connect Hit Bus to Stereo Panner or Master Gain
+      if (panner) {
+        hitBus.connect(panner);
+        panner.connect(this.masterGain);
       } else {
-        const osc = this.ctx.createOscillator();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(freq * 1.15, now);
-        osc.frequency.exponentialRampToValueAtTime(freq * 0.7, now + 0.07);
-
-        gain.gain.setValueAtTime(this.hitVolume * 0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
-
-        osc.connect(gain);
-        if (panner) {
-          gain.connect(panner);
-          panner.connect(this.masterGain);
-        } else {
-          gain.connect(this.masterGain);
-        }
-
-        osc.start(now);
-        osc.stop(now + 0.1);
+        hitBus.connect(this.masterGain);
       }
     } catch {
       // Audio failsafe
@@ -153,17 +146,17 @@ class ProceduralSoundEngine {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
 
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(560 * (0.85 + accuracyRatio * 0.35), now);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440 * (0.9 + accuracyRatio * 0.3), now);
 
-      gain.gain.setValueAtTime(this.hitVolume * 0.14, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      gain.gain.setValueAtTime(this.hitVolume * 0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
 
       osc.connect(gain);
       gain.connect(this.masterGain);
 
       osc.start(now);
-      osc.stop(now + 0.05);
+      osc.stop(now + 0.045);
     } catch {
       // ignore
     }
@@ -234,9 +227,6 @@ class ProceduralSoundEngine {
     }
   }
 
-  /**
-   * Valorant RGX 11z Pro Blade Knife Slash Sound
-   */
   public playKnifeSlash() {
     try {
       this.init();
@@ -263,9 +253,6 @@ class ProceduralSoundEngine {
     }
   }
 
-  /**
-   * Valorant RGX 11z Pro Karambit 360 Spin Whoosh Sound
-   */
   public playKarambitSpin() {
     try {
       this.init();
