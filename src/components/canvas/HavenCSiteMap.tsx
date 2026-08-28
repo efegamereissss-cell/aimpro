@@ -144,15 +144,6 @@ export const HavenCSiteMap: React.FC = () => {
         </group>
       ))}
 
-      {/* Radianite Energy Boxes at C-Site Plat */}
-      <mesh position={[-6, 1.2, -8]} castShadow>
-        <boxGeometry args={[1.6, 2.4, 1.6]} />
-        <meshStandardMaterial color="#00f0ff" emissive="#00f0ff" emissiveIntensity={1.0} roughness={0.2} metalness={0.8} />
-      </mesh>
-      <mesh position={[6, 1.2, -8]} castShadow>
-        <boxGeometry args={[1.6, 2.4, 1.6]} />
-        <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={0.8} roughness={0.25} metalness={0.7} />
-      </mesh>
     </group>
   );
 };

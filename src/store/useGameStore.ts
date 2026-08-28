@@ -238,28 +238,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const period = target.movementPattern === 'strafe_short' ? 0.7 : 1.8;
         x = target.spawnPosition[0] + Math.sin((elapsed / period) * Math.PI) * (target.movementPattern === 'strafe_short' ? 2.0 : 4.5);
       } else if (target.movementPattern === 'strafe_random') {
-        // Pure Linear A/D Counter-Strafe Peeking (Left & Right from behind corner wall)
-        const strafePeriod = 1.8 + Math.sin(target.movementPhase) * 0.3;
-        const cycle = ((elapsed + target.movementPhase) % strafePeriod) / strafePeriod;
+        // Authentic Tactical Wall-Corner Counter-Strafe Peek & Retreat
+        const strafePeriod = 2.4 + Math.sin(target.movementPhase) * 0.4;
+        const phase = (elapsed + target.movementPhase) % strafePeriod;
         
-        // Sine acceleration with deadzone at apex (counter-strafe 0-velocity stop)
-        let strafeFactor = Math.sin(cycle * Math.PI * 2);
-        if (Math.abs(strafeFactor) < 0.12) {
-          strafeFactor = 0; // Crisp counter-strafe stop
+        const minX = scenario.spawnArea.xMin; // e.g. -6.0 (deep in open corridor)
+        const maxX = scenario.spawnArea.xMax; // e.g. -1.8 (hidden behind right corner wall)
+        
+        let peekProgress = 0; // 0 = behind wall (maxX), 1 = fully peeked (minX)
+        
+        // 4-stage realistic tactical peek cycle:
+        // Stage 1 (0.0 to 0.6s): Swing out from behind wall
+        // Stage 2 (0.6 to 1.1s): Hold peek angle (0-velocity shot window)
+        // Stage 3 (1.1 to 1.6s): Counter-strafe back into cover
+        // Stage 4 (1.6 to 2.4s): In cover behind wall preparing next peek
+        if (phase < 0.6) {
+          const t = phase / 0.6;
+          peekProgress = Math.sin(t * (Math.PI / 2)); // Smooth acceleration out
+        } else if (phase < 1.1) {
+          peekProgress = 1.0; // Steady crosshair peek window
+        } else if (phase < 1.7) {
+          const t = (phase - 1.1) / 0.6;
+          peekProgress = 1.0 - Math.sin(t * (Math.PI / 2)); // Smooth step back into cover
+        } else {
+          peekProgress = 0.0; // In cover behind wall
         }
         
-        const isWideSwing = (Math.floor((elapsed + target.movementPhase) / strafePeriod) % 3 === 0);
-        const amplitude = isWideSwing ? 3.0 : 1.4;
-        
-        const minX = scenario.spawnArea.xMin;
-        const maxX = scenario.spawnArea.xMax;
-        const centerX = (minX + maxX) / 2;
-        
-        x = centerX + strafeFactor * (amplitude / 2);
-        x = Math.max(minX, Math.min(maxX, x));
+        x = maxX - peekProgress * (maxX - minX);
         y = target.spawnPosition[1];
         z = target.spawnPosition[2];
-        vx = strafeFactor * scenario.movementSpeed;
+        vx = (phase < 0.6 ? -1 : phase < 1.1 ? 0 : 1) * scenario.movementSpeed;
       } else if (target.movementPattern === 'orbit_360') {
         const angle = elapsed * (scenario.movementSpeed * 0.4) + target.movementPhase;
         const radius = 9;

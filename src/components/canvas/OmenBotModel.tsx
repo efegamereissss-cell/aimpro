@@ -73,8 +73,8 @@ function preloadOmenModel() {
         omenMesh.castShadow = true;
         omenMesh.receiveShadow = true;
 
-        // Orient FBX Z-up to Three.js Y-up and face front
-        omenMesh.rotation.set(-Math.PI / 2, 0, Math.PI);
+        // Orient FBX Z-up to Three.js Y-up and face directly at player (+Z)
+        omenMesh.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
         // Scale 210.84cm to exact 1.85 meters
         const scale = 0.8774 * 0.01;
         omenMesh.scale.set(scale, scale, scale);
