@@ -100,7 +100,7 @@ export const PlayerController: React.FC = () => {
     const isBhop = scenario.id.includes('bhop');
 
     if (isHaven) {
-      posRef.current.set(0, 1.62, 8.0);
+      posRef.current.set(-5.5, 1.62, 10.5);
     } else if (isBhop) {
       posRef.current.set(0, 1.62, 2.0);
     } else {

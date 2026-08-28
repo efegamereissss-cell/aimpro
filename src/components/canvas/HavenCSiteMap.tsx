@@ -72,8 +72,7 @@ function preloadHavenModel() {
 
       // 2. Scale from Maya cm to Three.js meters (0.01 factor)
       fbx.scale.set(0.01, 0.01, 0.01);
-      // Center C-Site courtyard and double boxes directly at world origin (0, 0, 0)
-      fbx.position.set(1.75, 0, 5.0);
+      fbx.position.set(0, 0, 0);
 
       // 3. Assign rich tactical materials and optimize performance (0 dropped frames)
       fbx.traverse(child => {

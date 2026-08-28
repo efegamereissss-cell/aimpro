@@ -238,10 +238,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const period = target.movementPattern === 'strafe_short' ? 0.7 : 1.8;
         x = target.spawnPosition[0] + Math.sin((elapsed / period) * Math.PI) * (target.movementPattern === 'strafe_short' ? 2.0 : 4.5);
       } else if (target.movementPattern === 'strafe_random') {
-        x += vx * deltaSec;
-        if (Math.random() < 0.05) vx = -vx;
-        if (x < scenario.spawnArea.xMin || x > scenario.spawnArea.xMax) vx = -vx;
-      } else if (target.movementPattern === 'orbit_360') {
+        // Authentic Tactical Valorant/CS Counter-Strafe AI Physics
+        const strafePeriod = 1.8 + Math.sin(target.movementPhase) * 0.4;
+        const cycle = ((elapsed + target.movementPhase) % strafePeriod) / strafePeriod;
+        
+        // Sine acceleration with deadzone at apex (counter-strafe 0-velocity stop)
+        let strafeFactor = Math.sin(cycle * Math.PI * 2);
+        if (Math.abs(strafeFactor) < 0.12) {
+          strafeFactor = 0; // Crisp counter-strafe stop
+        }
+        
+        const isWideSwing = (Math.floor((elapsed + target.movementPhase) / strafePeriod) % 3 === 0);
+        const amplitude = isWideSwing ? 3.2 : 1.6;
+        
+        const minX = scenario.spawnArea.xMin;
+        const maxX = scenario.spawnArea.xMax;
+        const centerX = (minX + maxX) / 2;
+        
+        x = centerX + strafeFactor * (amplitude / 2);
+        x = Math.max(minX, Math.min(maxX, x));
+        vx = strafeFactor * scenario.movementSpeed;
         const angle = elapsed * (scenario.movementSpeed * 0.4) + target.movementPhase;
         const radius = 9;
         x = Math.sin(angle) * radius;
