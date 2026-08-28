@@ -14,7 +14,7 @@ export const STRAFING_SCENARIOS: ScenarioConfig[] = [
     targetMaxHealth: 1,
     movementPattern: 'strafe_random',
     movementSpeed: 5.2,
-    spawnArea: { xMin: -7.5, xMax: -3.5, yMin: 0.0, yMax: 0.0, zMin: -4.5, zMax: -3.5 },
+    spawnArea: { xMin: -7.5, xMax: -3.5, yMin: 0.0, yMax: 0.0, zMin: -4.0, zMax: -4.0 },
     respawnDelayMs: 50,
     scorePerHit: 100,
     scorePerKill: 500,
