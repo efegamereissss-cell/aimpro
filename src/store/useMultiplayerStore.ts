@@ -13,6 +13,9 @@ interface MultiplayerStore {
   nickname: string;
   color: string;
   hatType: HatType;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  velocity: [number, number, number];
   health: number;
   maxHealth: number;
   isAlive: boolean;
@@ -31,7 +34,8 @@ interface MultiplayerStore {
   setMultiplayerActive: (active: boolean) => void;
   setConnected: (connected: boolean, roomCode?: string) => void;
   setConnecting: (connecting: boolean, error?: string | null) => void;
-  updateLocalHealth: (delta: number) => { newHealth: number; isDead: boolean };
+  setLocalTransform: (position: [number, number, number], rotation: [number, number, number], velocity: [number, number, number]) => void;
+  updateLocalHealth: (damage: number) => { newHealth: number; isDead: boolean };
   setLocalHealth: (hp: number) => void;
   respawnLocalPlayer: () => void;
   incrementLocalKill: () => void;
@@ -40,7 +44,7 @@ interface MultiplayerStore {
   setScoreboardOpen: (open: boolean) => void;
 
   // Remote Player Actions
-  updateRemotePlayer: (player: RemotePlayerState) => void;
+  updateRemotePlayer: (player: Partial<RemotePlayerState> & { id: string }) => void;
   removeRemotePlayer: (id: string) => void;
   clearRemotePlayers: () => void;
   addKillfeedEntry: (entry: Omit<KillfeedEntry, 'id' | 'timestamp'>) => void;
@@ -49,8 +53,9 @@ interface MultiplayerStore {
 const DEFAULT_NICKNAMES = ['CyberNinja', 'NeonSniper', 'ApexPredator', 'QuantumStrike', 'VortexPhantom', 'RadiantGhost', 'ShadowFlick'];
 const DEFAULT_COLORS = ['#00f0ff', '#ff0055', '#ffea00', '#00ff66', '#a855f7', '#ff6600'];
 
-const randomNick = DEFAULT_NICKNAMES[Math.floor(Math.random() * DEFAULT_NICKNAMES.length)] + Math.floor(Math.random() * 99);
+const randomNick = DEFAULT_NICKNAMES[Math.floor(Math.random() * DEFAULT_NICKNAMES.length)] + '_' + Math.floor(Math.random() * 99);
 const randomColor = DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)];
+const randomLocalId = 'p_' + Math.random().toString(36).substring(2, 9);
 
 export const useMultiplayerStore = create<MultiplayerStore>((set, get) => ({
   isMultiplayerActive: false,
@@ -60,10 +65,13 @@ export const useMultiplayerStore = create<MultiplayerStore>((set, get) => ({
   connectionError: null,
 
   // Local Player State
-  localId: 'player_' + Math.random().toString(36).substring(2, 9),
+  localId: randomLocalId,
   nickname: typeof localStorage !== 'undefined' ? localStorage.getItem('aimpro_mp_nick') || randomNick : randomNick,
   color: typeof localStorage !== 'undefined' ? localStorage.getItem('aimpro_mp_color') || randomColor : randomColor,
   hatType: (typeof localStorage !== 'undefined' ? (localStorage.getItem('aimpro_mp_hat') as HatType) || 'triangle' : 'triangle'),
+  position: [0, 1.62, 0],
+  rotation: [0, 0, 0],
+  velocity: [0, 0, 0],
   health: 100,
   maxHealth: 100,
   isAlive: true,
@@ -88,6 +96,8 @@ export const useMultiplayerStore = create<MultiplayerStore>((set, get) => ({
   setMultiplayerActive: (active) => set({ isMultiplayerActive: active }),
   setConnected: (connected, roomCode) => set({ isConnected: connected, isConnecting: false, roomCode: roomCode || get().roomCode }),
   setConnecting: (connecting, error = null) => set({ isConnecting: connecting, connectionError: error }),
+
+  setLocalTransform: (position, rotation, velocity) => set({ position, rotation, velocity }),
 
   updateLocalHealth: (damage) => {
     const state = get();
@@ -118,7 +128,7 @@ export const useMultiplayerStore = create<MultiplayerStore>((set, get) => ({
     set({
       kills: s.kills + 1,
       streak: s.streak + 1,
-      health: Math.min(100, s.health + 35) // Reward 35 HP on kill!
+      health: Math.min(100, s.health + 35)
     });
   },
 
@@ -130,12 +140,35 @@ export const useMultiplayerStore = create<MultiplayerStore>((set, get) => ({
   setRespawnTimer: (time) => set({ respawnTimeRemaining: time }),
   setScoreboardOpen: (open) => set({ isScoreboardOpen: open }),
 
-  updateRemotePlayer: (player) => set(s => ({
-    remotePlayers: {
-      ...s.remotePlayers,
-      [player.id]: player
-    }
-  })),
+  updateRemotePlayer: (player) => set(s => {
+    const existing = s.remotePlayers[player.id];
+    const updated: RemotePlayerState = {
+      id: player.id,
+      nickname: player.nickname || existing?.nickname || 'Player',
+      color: player.color || existing?.color || '#00f0ff',
+      hatType: player.hatType || existing?.hatType || 'triangle',
+      position: player.position || existing?.position || [0, 1.62, 0],
+      rotation: player.rotation || existing?.rotation || [0, 0, 0],
+      velocity: player.velocity || existing?.velocity || [0, 0, 0],
+      activeWeapon: player.activeWeapon || existing?.activeWeapon || 'vandal',
+      health: player.health !== undefined ? player.health : existing?.health !== undefined ? existing.health : 100,
+      maxHealth: 100,
+      isAlive: player.isAlive !== undefined ? player.isAlive : existing?.isAlive !== undefined ? existing.isAlive : true,
+      isFiring: player.isFiring !== undefined ? player.isFiring : existing?.isFiring || false,
+      isJumping: player.isJumping !== undefined ? player.isJumping : existing?.isJumping || false,
+      kills: player.kills !== undefined ? player.kills : existing?.kills || 0,
+      deaths: player.deaths !== undefined ? player.deaths : existing?.deaths || 0,
+      ping: player.ping !== undefined ? player.ping : existing?.ping || 15,
+      lastUpdated: Date.now()
+    };
+
+    return {
+      remotePlayers: {
+        ...s.remotePlayers,
+        [player.id]: updated
+      }
+    };
+  }),
 
   removeRemotePlayer: (id) => set(s => {
     const next = { ...s.remotePlayers };
@@ -153,6 +186,6 @@ export const useMultiplayerStore = create<MultiplayerStore>((set, get) => ({
         timestamp: Date.now()
       },
       ...s.killfeed
-    ].slice(0, 6) // Keep latest 6 entries
+    ].slice(0, 6)
   }))
 }));

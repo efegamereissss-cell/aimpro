@@ -14,17 +14,24 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
   const rightLegRef = useRef<THREE.Mesh>(null);
   const headRef = useRef<THREE.Group>(null);
 
-  const targetPos = useRef(new THREE.Vector3(...player.position));
-  const targetYaw = useRef(player.rotation[1]);
-  const targetPitch = useRef(player.rotation[0]);
+  const initPos = player.position && Array.isArray(player.position) ? player.position : [0, 1.62, 0];
+  const initRot = player.rotation && Array.isArray(player.rotation) ? player.rotation : [0, 0, 0];
+
+  const targetPos = useRef(new THREE.Vector3(initPos[0], initPos[1], initPos[2]));
+  const targetYaw = useRef(initRot[1] || 0);
+  const targetPitch = useRef(initRot[0] || 0);
 
   // Smooth position and rotation interpolation (60fps lerp)
   useFrame((_, delta) => {
     if (!groupRef.current) return;
 
-    targetPos.current.set(...player.position);
-    targetYaw.current = player.rotation[1];
-    targetPitch.current = player.rotation[0];
+    const pPos = player.position && Array.isArray(player.position) ? player.position : [0, 1.62, 0];
+    const pRot = player.rotation && Array.isArray(player.rotation) ? player.rotation : [0, 0, 0];
+    const pVel = player.velocity && Array.isArray(player.velocity) ? player.velocity : [0, 0, 0];
+
+    targetPos.current.set(pPos[0], pPos[1], pPos[2]);
+    targetYaw.current = pRot[1] || 0;
+    targetPitch.current = pRot[0] || 0;
 
     // Lerp position for silky smooth 144Hz movement
     groupRef.current.position.lerp(targetPos.current, Math.min(1, delta * 24));
@@ -35,7 +42,7 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
     }
 
     // Walking leg swing animation
-    const speed = Math.hypot(player.velocity[0], player.velocity[2]);
+    const speed = Math.hypot(pVel[0], pVel[2]);
     if (speed > 0.5 && leftLegRef.current && rightLegRef.current) {
       const legSwing = Math.sin(Date.now() * 0.012) * 0.45;
       leftLegRef.current.rotation.x = legSwing;

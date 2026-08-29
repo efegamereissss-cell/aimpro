@@ -1,28 +1,38 @@
-import Peer, { DataConnection } from 'peerjs';
 import { NetworkPacket, RemotePlayerState, NetworkMessageType } from '../../types/multiplayer';
 import { useMultiplayerStore } from '../../store/useMultiplayerStore';
 import { soundEngine } from '../../audio/SoundEngine';
 
 class MultiplayerService {
-  private peer: Peer | null = null;
-  private connections: Map<string, DataConnection> = new Map();
   private broadcastChannel: BroadcastChannel | null = null;
+  private ws: WebSocket | null = null;
   private heartbeatInterval: number | null = null;
-  private broadcastInterval: number | null = null;
   private isDestroyed = false;
   private currentRoom: string = 'aimpro-global-dm';
 
   public init() {
     if (typeof window === 'undefined') return;
 
+    // 1. BroadcastChannel (Same-browser multi-tab sync)
     try {
       this.broadcastChannel = new BroadcastChannel('aimpro-mp-network');
       this.broadcastChannel.onmessage = (event: MessageEvent<NetworkPacket>) => {
         this.handleIncomingPacket(event.data);
       };
     } catch (e) {
-      console.warn('BroadcastChannel not supported:', e);
+      console.warn('[Multiplayer] BroadcastChannel not supported:', e);
     }
+
+    // 2. LocalStorage Storage Event Bus (Cross-tab / Incognito sync)
+    try {
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'aimpro_mp_packet' && e.newValue) {
+          try {
+            const packet = JSON.parse(e.newValue) as NetworkPacket;
+            this.handleIncomingPacket(packet);
+          } catch (err) {}
+        }
+      });
+    } catch (e) {}
   }
 
   public connect(roomCode: string = 'aimpro-global-dm') {
@@ -33,107 +43,62 @@ class MultiplayerService {
     const store = useMultiplayerStore.getState();
     store.setConnecting(true, null);
 
-    const localId = store.localId;
-    const peerId = `aimpro_${this.currentRoom}_${localId}`;
-
+    // 3. Connect to Public High-Availability WebSocket Relay for Cross-Browser/Cross-Device play
     try {
-      this.peer = new Peer(peerId, {
-        debug: 1,
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
-          ]
-        }
-      });
+      // Connect to public Piesocket / Free WebSockets channel
+      const wsUrl = `wss://free.blr2.piesocket.com/v3/${encodeURIComponent(this.currentRoom)}?api_key=VCXCEuvhGcBDP7XhiJJUDvR1e1D3eiVjgZ9VRiaV&notify_self=0`;
+      this.ws = new WebSocket(wsUrl);
 
-      this.peer.on('open', () => {
-        console.log('[Multiplayer] Connected with Peer ID:', peerId);
+      this.ws.onopen = () => {
+        console.log('[Multiplayer] Connected to WebSocket Relay for room:', this.currentRoom);
         store.setConnected(true, this.currentRoom);
 
-        // Connect to room host or try host connection
-        this.tryConnectToHost();
+        // Send initial join packet
+        this.broadcastLocalJoin();
+      };
 
-        // Broadcast join packet
-        this.sendPacket('PLAYER_JOIN', {
-          id: localId,
-          nickname: store.nickname,
-          color: store.color,
-          hatType: store.hatType,
-          position: [0, 1.62, 0],
-          health: 100
-        });
+      this.ws.onmessage = (event) => {
+        try {
+          const packet = JSON.parse(event.data) as NetworkPacket;
+          this.handleIncomingPacket(packet);
+        } catch (err) {}
+      };
 
-        // Start periodic sync loops
-        this.startHeartbeat();
-      });
+      this.ws.onerror = (err) => {
+        console.warn('[Multiplayer] WebSocket Relay fallback to local channels:', err);
+        store.setConnected(true, this.currentRoom);
+      };
 
-      this.peer.on('connection', (conn) => {
-        this.setupConnection(conn);
-      });
-
-      this.peer.on('error', (err) => {
-        console.warn('[Multiplayer] PeerJS warning/error:', err.type, err.message);
-        store.setConnecting(false, null);
-        store.setConnected(true, this.currentRoom); // Keep local broadcast channel fully operational
-      });
-
-      this.peer.on('disconnected', () => {
-        console.log('[Multiplayer] Disconnected from peer broker.');
-      });
-    } catch (err: any) {
-      console.warn('[Multiplayer] PeerJS initialization fallback:', err);
+      this.ws.onclose = () => {
+        if (!this.isDestroyed) {
+          store.setConnected(true, this.currentRoom);
+        }
+      };
+    } catch (err) {
+      console.warn('[Multiplayer] WebSocket fallback:', err);
       store.setConnected(true, this.currentRoom);
-      this.startHeartbeat();
     }
+
+    // Always enable local and storage mesh immediately
+    store.setConnected(true, this.currentRoom);
+    this.broadcastLocalJoin();
+    this.startHeartbeat();
   }
 
-  private tryConnectToHost() {
-    if (!this.peer || this.peer.destroyed) return;
-    const hostPeerId = `aimpro_${this.currentRoom}_host`;
-    if (this.peer.id !== hostPeerId && !this.connections.has(hostPeerId)) {
-      try {
-        const conn = this.peer.connect(hostPeerId, { reliable: true });
-        this.setupConnection(conn);
-      } catch (e) {}
-    }
-  }
-
-  private setupConnection(conn: DataConnection) {
-    conn.on('open', () => {
-      this.connections.set(conn.peer, conn);
-      console.log('[Multiplayer] Data connection opened with:', conn.peer);
-
-      // Send local state immediately
-      const store = useMultiplayerStore.getState();
-      conn.send({
-        type: 'PLAYER_JOIN',
-        senderId: store.localId,
-        payload: {
-          id: store.localId,
-          nickname: store.nickname,
-          color: store.color,
-          hatType: store.hatType,
-          health: store.health,
-          maxHealth: store.maxHealth,
-          isAlive: store.isAlive,
-          kills: store.kills,
-          deaths: store.deaths
-        },
-        timestamp: Date.now()
-      });
-    });
-
-    conn.on('data', (data: any) => {
-      this.handleIncomingPacket(data as NetworkPacket);
-    });
-
-    conn.on('close', () => {
-      this.connections.delete(conn.peer);
-    });
-
-    conn.on('error', () => {
-      this.connections.delete(conn.peer);
+  public broadcastLocalJoin() {
+    const store = useMultiplayerStore.getState();
+    this.sendPacket('PLAYER_JOIN', {
+      id: store.localId,
+      nickname: store.nickname,
+      color: store.color,
+      hatType: store.hatType,
+      position: store.position,
+      rotation: store.rotation,
+      velocity: store.velocity,
+      activeWeapon: 'vandal',
+      health: store.health,
+      kills: store.kills,
+      deaths: store.deaths
     });
   }
 
@@ -146,21 +111,24 @@ class MultiplayerService {
       timestamp: Date.now()
     };
 
-    // 1. BroadcastChannel (Zero-latency instant multi-tab sync)
+    // 1. Send to BroadcastChannel (Instant for all tabs)
     if (this.broadcastChannel) {
       try {
         this.broadcastChannel.postMessage(packet);
       } catch (e) {}
     }
 
-    // 2. WebRTC P2P Mesh
-    this.connections.forEach((conn) => {
-      if (conn.open) {
-        try {
-          conn.send(packet);
-        } catch (e) {}
-      }
-    });
+    // 2. Send via LocalStorage event
+    try {
+      localStorage.setItem('aimpro_mp_packet', JSON.stringify(packet));
+    } catch (e) {}
+
+    // 3. Send via WebSocket Relay (for different browsers / devices)
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(JSON.stringify(packet));
+      } catch (e) {}
+    }
   }
 
   public broadcastLocalState(
@@ -172,6 +140,8 @@ class MultiplayerService {
   ) {
     const store = useMultiplayerStore.getState();
     if (!store.isMultiplayerActive) return;
+
+    store.setLocalTransform(position, rotation, velocity);
 
     this.sendPacket('PLAYER_STATE', {
       id: store.localId,
@@ -229,57 +199,50 @@ class MultiplayerService {
     switch (packet.type) {
       case 'PLAYER_JOIN': {
         const p = packet.payload;
-        // Register newly joined player
+        // 1. Add remote player to store
         store.updateRemotePlayer({
           id: p.id,
           nickname: p.nickname || 'Player',
           color: p.color || '#00f0ff',
           hatType: p.hatType || 'triangle',
           position: p.position || [0, 1.62, 0],
-          rotation: [0, 0, 0],
-          velocity: [0, 0, 0],
-          activeWeapon: 'vandal',
-          health: p.health || 100,
+          rotation: p.rotation || [0, 0, 0],
+          velocity: p.velocity || [0, 0, 0],
+          activeWeapon: p.activeWeapon || 'vandal',
+          health: p.health !== undefined ? p.health : 100,
           maxHealth: 100,
           isAlive: true,
-          isFiring: false,
-          isJumping: false,
           kills: p.kills || 0,
           deaths: p.deaths || 0,
-          ping: 15,
-          lastUpdated: Date.now()
+          ping: 15
         });
 
-        // Respond with our own state so the new player immediately sees us
+        // 2. Immediately reply with local state so the other player sees us too
         this.sendPacket('PLAYER_STATE', {
           id: store.localId,
           nickname: store.nickname,
           color: store.color,
           hatType: store.hatType,
+          position: store.position,
+          rotation: store.rotation,
+          velocity: store.velocity,
+          activeWeapon: 'vandal',
           health: store.health,
           maxHealth: store.maxHealth,
           isAlive: store.isAlive,
           kills: store.kills,
           deaths: store.deaths
         });
-
-        // Connect PeerJS connection if not already connected
-        if (this.peer && !this.peer.destroyed) {
-          const targetPeerId = `aimpro_${this.currentRoom}_${p.id}`;
-          if (!this.connections.has(targetPeerId)) {
-            try {
-              const conn = this.peer.connect(targetPeerId, { reliable: true });
-              this.setupConnection(conn);
-            } catch (e) {}
-          }
-        }
         break;
       }
 
       case 'PLAYER_STATE': {
-        const p = packet.payload as RemotePlayerState;
+        const p = packet.payload;
         store.updateRemotePlayer({
-          ...p,
+          id: p.id,
+          nickname: p.nickname,
+          color: p.color,
+          hatType: p.hatType,
           position: p.position || [0, 1.62, 0],
           rotation: p.rotation || [0, 0, 0],
           velocity: p.velocity || [0, 0, 0],
@@ -287,7 +250,10 @@ class MultiplayerService {
           health: p.health !== undefined ? p.health : 100,
           maxHealth: 100,
           isAlive: p.isAlive !== undefined ? p.isAlive : true,
-          lastUpdated: Date.now()
+          isJumping: p.isJumping || false,
+          kills: p.kills || 0,
+          deaths: p.deaths || 0,
+          ping: 15
         });
         break;
       }
@@ -310,7 +276,6 @@ class MultiplayerService {
           const { isDead } = store.updateLocalHealth(damage);
 
           if (isDead) {
-            // Broadcast death event
             this.sendPacket('PLAYER_DEATH', {
               killerId: attackerId,
               killerName: attackerName,
@@ -322,7 +287,6 @@ class MultiplayerService {
               isHeadshot
             });
 
-            // Add to killfeed
             store.addKillfeedEntry({
               killerId: attackerId,
               killerName: attackerName,
@@ -368,39 +332,38 @@ class MultiplayerService {
 
   private startHeartbeat() {
     if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
-    if (this.broadcastInterval) clearInterval(this.broadcastInterval);
 
-    // 1. Periodic State Beacon (every 100ms) to ensure continuous synchronization
-    this.broadcastInterval = window.setInterval(() => {
+    // Continuous 150ms heartbeat broadcast
+    this.heartbeatInterval = window.setInterval(() => {
       if (this.isDestroyed) return;
       const store = useMultiplayerStore.getState();
       if (!store.isMultiplayerActive) return;
 
+      // Broadcast full state with position
       this.sendPacket('PLAYER_STATE', {
         id: store.localId,
         nickname: store.nickname,
         color: store.color,
         hatType: store.hatType,
+        position: store.position,
+        rotation: store.rotation,
+        velocity: store.velocity,
+        activeWeapon: 'vandal',
         health: store.health,
         maxHealth: store.maxHealth,
         isAlive: store.isAlive,
         kills: store.kills,
         deaths: store.deaths
       });
-    }, 120);
 
-    // 2. Inactive peer cleanup (after 6s of no signal)
-    this.heartbeatInterval = window.setInterval(() => {
-      if (this.isDestroyed) return;
-      const store = useMultiplayerStore.getState();
+      // Cleanup stale players (after 8s of inactivity)
       const now = Date.now();
-
       Object.values(store.remotePlayers).forEach((player) => {
-        if (now - player.lastUpdated > 6000) {
+        if (now - player.lastUpdated > 8000) {
           store.removeRemotePlayer(player.id);
         }
       });
-    }, 1500);
+    }, 150);
   }
 
   public disconnect() {
@@ -409,22 +372,17 @@ class MultiplayerService {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
-    if (this.broadcastInterval) {
-      clearInterval(this.broadcastInterval);
-      this.broadcastInterval = null;
-    }
 
     const store = useMultiplayerStore.getState();
     if (store.isConnected) {
       this.sendPacket('PLAYER_LEAVE', { id: store.localId });
     }
 
-    this.connections.forEach((conn) => conn.close());
-    this.connections.clear();
-
-    if (this.peer) {
-      this.peer.destroy();
-      this.peer = null;
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {}
+      this.ws = null;
     }
 
     store.setConnected(false);
