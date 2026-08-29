@@ -68,7 +68,10 @@ export const MultiplayerLobbyModal: React.FC<MultiplayerLobbyModalProps> = ({ is
       name: `Online Deathmatch [${finalRoom}]`,
       duration: 600, // 10 minutes match
       targetCount: 0, // No bots in multiplayer DM!
-      tags: ['Online Deathmatch', 'Multiplayer', 'Redmatch 2']
+      weaponType: 'rifle',
+      isAutomatic: true,
+      fireRateRps: 9.75,
+      tags: ['Online Deathmatch', 'Multiplayer', 'Redmatch 2', 'Vandal Full Auto']
     });
     startGame();
     onClose();

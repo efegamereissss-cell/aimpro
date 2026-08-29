@@ -103,6 +103,7 @@ export const PlayerController: React.FC = () => {
     const isBhop = scenario.id.includes('bhop');
 
     if (isMp) {
+      setWeaponSlot('vandal');
       // Spawn on one of the flat open arena platforms facing center
       const spawnPads = [
         [-25, -25],
@@ -132,7 +133,7 @@ export const PlayerController: React.FC = () => {
     isGroundedRef.current = true;
     camera.position.copy(posRef.current);
     camera.quaternion.set(0, 0, 0, 1);
-  }, [scenario.id, camera]);
+  }, [scenario.id, camera, setWeaponSlot]);
 
   // Handle Weapon Firing
   const handleFire = useCallback(() => {
@@ -213,13 +214,52 @@ export const PlayerController: React.FC = () => {
       }
     }
 
-    // 1. MULTIPLAYER REMOTE PLAYER HIT
+    // Mathematical Ray-Sphere Hit Check for Remote Players (100% Guaranteed Hit Reliability)
+    if (!hitRemotePlayerId && isMultiplayerActive) {
+      const remotePlayers = useMultiplayerStore.getState().remotePlayers;
+      for (const p of Object.values(remotePlayers)) {
+        if (!p.isAlive) continue;
+        const pPos = p.position || [0, 1.62, 0];
+        const headCenter = new THREE.Vector3(pPos[0], pPos[1] - 0.07, pPos[2]);
+        const bodyCenter = new THREE.Vector3(pPos[0], pPos[1] - 0.65, pPos[2]);
+        const headSphere = new THREE.Sphere(headCenter, 0.38);
+        const bodySphere = new THREE.Sphere(bodyCenter, 0.54);
+
+        const intersectHead = new THREE.Vector3();
+        const intersectBody = new THREE.Vector3();
+
+        if (ray.intersectSphere(headSphere, intersectHead)) {
+          hitRemotePlayerId = p.id;
+          hitPoint = [intersectHead.x, intersectHead.y, intersectHead.z];
+          isHeadshot = true;
+          break;
+        } else if (ray.intersectSphere(bodySphere, intersectBody)) {
+          hitRemotePlayerId = p.id;
+          hitPoint = [intersectBody.x, intersectBody.y, intersectBody.z];
+          isHeadshot = false;
+          break;
+        }
+      }
+    }
+
+    // 1. MULTIPLAYER REMOTE PLAYER HIT (Instant 0ms Feedback)
     if (hitRemotePlayerId && hitPoint) {
       const damage = currentSlot === 'vandal' 
         ? (isHeadshot ? 160 : 40)
         : currentSlot === 'sheriff'
         ? (isHeadshot ? 145 : 55)
         : 75;
+
+      // Optimistic instant local health reduction (0ms latency!)
+      const targetPlayer = useMultiplayerStore.getState().remotePlayers[hitRemotePlayerId];
+      if (targetPlayer) {
+        const nextHp = Math.max(0, targetPlayer.health - damage);
+        useMultiplayerStore.getState().updateRemotePlayer({
+          id: hitRemotePlayerId,
+          health: nextHp,
+          isAlive: nextHp > 0
+        });
+      }
 
       multiplayerService.sendDamage(hitRemotePlayerId, damage, isHeadshot, currentSlot);
       soundEngine.playHitSound(1, isHeadshot);
