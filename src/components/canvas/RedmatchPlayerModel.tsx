@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,67 +14,92 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
   const rightLegRef = useRef<THREE.Mesh>(null);
   const upperBodyRef = useRef<THREE.Group>(null);
 
-  // Interpolation state — separate from React props so we get buttery 144Hz smooth motion
-  const interpPos = useRef(new THREE.Vector3(0, 0, 0));
-  const interpYaw = useRef(0);
-  const interpPitch = useRef(0);
-  const lastVel = useRef(new THREE.Vector3(0, 0, 0));
-  const initialized = useRef(false);
+  // High-precision Snapshot / Dead-Reckoning Extrapolation State
+  const packetPos = useRef(new THREE.Vector3(0, 0, 0));
+  const packetVel = useRef(new THREE.Vector3(0, 0, 0));
+  const packetYaw = useRef(0);
+  const packetPitch = useRef(0);
+  const packetTime = useRef(performance.now());
+  const lastPacketTimestamp = useRef(0);
 
-  useFrame((_, delta) => {
-    if (!groupRef.current) return;
+  // Continuous visual position & rotation rendered at 144Hz
+  const visualPos = useRef(new THREE.Vector3(0, 0, 0));
+  const visualYaw = useRef(0);
+  const visualPitch = useRef(0);
+  const isInitialized = useRef(false);
+
+  // Sync state whenever player data updates
+  useEffect(() => {
+    if (!player) return;
 
     const pPos = player.position && Array.isArray(player.position) ? player.position : [0, 1.62, 0];
     const pRot = player.rotation && Array.isArray(player.rotation) ? player.rotation : [0, 0, 0];
     const pVel = player.velocity && Array.isArray(player.velocity) ? player.velocity : [0, 0, 0];
 
-    const targetX = pPos[0];
-    const targetY = Math.max(0, pPos[1] - 1.62);
-    const targetZ = pPos[2];
-    const targetYaw = pRot[1] || 0;
-    const targetPitch = pRot[0] || 0;
+    const groundY = Math.max(0, pPos[1] - 1.62);
 
-    // First frame — snap immediately, no lerp
-    if (!initialized.current) {
-      interpPos.current.set(targetX, targetY, targetZ);
-      interpYaw.current = targetYaw;
-      interpPitch.current = targetPitch;
-      initialized.current = true;
+    packetPos.current.set(pPos[0], groundY, pPos[2]);
+    packetVel.current.set(pVel[0], pVel[1], pVel[2]);
+    packetYaw.current = pRot[1] || 0;
+    packetPitch.current = pRot[0] || 0;
+    packetTime.current = performance.now();
+    lastPacketTimestamp.current = player.lastUpdated || Date.now();
+
+    if (!isInitialized.current) {
+      visualPos.current.set(pPos[0], groundY, pPos[2]);
+      visualYaw.current = packetYaw.current;
+      visualPitch.current = packetPitch.current;
+      isInitialized.current = true;
     }
+  }, [player]);
 
-    // Dead-reckoning: predict position forward using velocity for ultra-smooth 144Hz motion
-    const predX = targetX + pVel[0] * delta * 2.5;
-    const predZ = targetZ + pVel[2] * delta * 2.5;
+  useFrame((_, delta) => {
+    if (!groupRef.current || !player.isAlive) return;
 
-    // Smooth high-frequency interpolation (clamped to prevent overshooting)
-    const lerpSpeed = Math.min(1, delta * 16);
-    interpPos.current.x += (predX - interpPos.current.x) * lerpSpeed;
-    interpPos.current.y += (targetY - interpPos.current.y) * lerpSpeed;
-    interpPos.current.z += (predZ - interpPos.current.z) * lerpSpeed;
-    interpYaw.current += (targetYaw - interpYaw.current) * lerpSpeed;
-    interpPitch.current += (targetPitch - interpPitch.current) * lerpSpeed;
+    const now = performance.now();
+    // Elapsed time since the last authoritative state packet (clamped to 0.25s to avoid runaway)
+    const elapsedSec = Math.max(0, Math.min(0.25, (now - packetTime.current) / 1000.0));
 
-    // Apply interpolated transform
-    groupRef.current.position.copy(interpPos.current);
-    groupRef.current.rotation.y = interpYaw.current;
+    // Continuous Real-Time Extrapolation: Predict exact position in real time
+    const predX = packetPos.current.x + packetVel.current.x * elapsedSec;
+    const predY = packetPos.current.y + packetVel.current.y * elapsedSec;
+    const predZ = packetPos.current.z + packetVel.current.z * elapsedSec;
 
-    // Pitch upper body
+    // Frame-rate independent exponential smoothing filter (24x per second)
+    const dtClamped = Math.min(delta, 0.05);
+    const smoothFactor = 1.0 - Math.exp(-24.0 * dtClamped);
+
+    visualPos.current.x += (predX - visualPos.current.x) * smoothFactor;
+    visualPos.current.y += (Math.max(0, predY) - visualPos.current.y) * smoothFactor;
+    visualPos.current.z += (predZ - visualPos.current.z) * smoothFactor;
+
+    // Shortest-arc Angular Lerp for Yaw (prevents 360-degree reverse spin glitch)
+    let diffYaw = (packetYaw.current - visualYaw.current) % (Math.PI * 2);
+    if (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
+    if (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
+    visualYaw.current += diffYaw * smoothFactor;
+
+    // Pitch lerp
+    visualPitch.current += (packetPitch.current - visualPitch.current) * smoothFactor;
+
+    // Apply transform to root model
+    groupRef.current.position.copy(visualPos.current);
+    groupRef.current.rotation.y = visualYaw.current;
+
+    // Pitch upper body with look direction
     if (upperBodyRef.current) {
-      upperBodyRef.current.rotation.x = interpPitch.current;
+      upperBodyRef.current.rotation.x = visualPitch.current;
     }
 
-    // Store velocity for leg animation
-    lastVel.current.set(pVel[0], pVel[1], pVel[2]);
-
-    // Walking leg swing animation
-    const speed = Math.hypot(pVel[0], pVel[2]);
-    if (speed > 0.4 && leftLegRef.current && rightLegRef.current) {
-      const legSwing = Math.sin(Date.now() * 0.014) * 0.5;
+    // Walking leg swing animation based on continuous ground velocity
+    const groundSpeed = Math.hypot(packetVel.current.x, packetVel.current.z);
+    if (groundSpeed > 0.3 && leftLegRef.current && rightLegRef.current) {
+      const legSwing = Math.sin(now * 0.012) * 0.55;
       leftLegRef.current.rotation.x = legSwing;
       rightLegRef.current.rotation.x = -legSwing;
     } else if (leftLegRef.current && rightLegRef.current) {
-      leftLegRef.current.rotation.x *= 0.85;
-      rightLegRef.current.rotation.x *= 0.85;
+      leftLegRef.current.rotation.x *= 0.82;
+      rightLegRef.current.rotation.x *= 0.82;
     }
   });
 
@@ -111,7 +136,7 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
         </div>
       </Html>
 
-      {/* UPPER BODY GROUP (Pitches with look direction) */}
+      {/* UPPER BODY GROUP (Pitches with vertical aim) */}
       <group ref={upperBodyRef} position={[0, 1.0, 0]}>
         {/* Torso */}
         <mesh position={[0, 0, 0]} castShadow userData={{ targetId: player.id, isHeadshot: false, isRemotePlayer: true }}>
@@ -119,7 +144,7 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
           <meshStandardMaterial color={color} roughness={0.3} metalness={0.5} />
         </mesh>
 
-        {/* Torso stripe */}
+        {/* Torso accent badge */}
         <mesh position={[0, 0.05, 0.172]}>
           <planeGeometry args={[0.36, 0.18]} />
           <meshStandardMaterial color="#0f172a" roughness={0.8} />
@@ -180,7 +205,7 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
 
       {/* Full body hitbox cylinder */}
       <mesh position={[0, 0.95, 0]} userData={{ targetId: player.id, isHeadshot: false, isRemotePlayer: true }}>
-        <cylinderGeometry args={[0.42, 0.42, 1.8, 8]} />
+        <cylinderGeometry args={[0.45, 0.45, 1.9, 12]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
     </group>

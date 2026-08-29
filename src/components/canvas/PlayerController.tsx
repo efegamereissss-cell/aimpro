@@ -139,8 +139,8 @@ export const PlayerController: React.FC = () => {
   // Handle Weapon Firing
   const handleFire = useCallback(() => {
     if (gameStatusRef.current !== 'playing') return;
-    const mpStore = useMultiplayerStore.getState();
-    if (mpStore.isMultiplayerActive && !mpStore.isAlive) return;
+    const isMultiplayerActive = useMultiplayerStore.getState().isMultiplayerActive;
+    if (isMultiplayerActive && !useMultiplayerStore.getState().isAlive) return;
 
     const currentScenario = scenarioRef.current;
     const rawSlot = activeWeaponSlotRef.current;
@@ -149,12 +149,11 @@ export const PlayerController: React.FC = () => {
     const currentSettings = settingsRef.current;
 
     const now = Date.now();
-    // Zero-delay ultra-responsive clicking for fast flicking / Gridshot drills
     const intervalMs =
       currentSlot === 'knife'
         ? 180
         : currentSlot === 'sheriff'
-        ? 20 // Instantaneous registration for rapid clicking
+        ? 30
         : 1000 / (currentScenario.fireRateRps || 9.75);
 
     if (now - lastShotTimeRef.current < intervalMs) return;
@@ -167,8 +166,6 @@ export const PlayerController: React.FC = () => {
     } else {
       soundEngine.playChaosVandal();
     }
-
-    const isMultiplayerActive = useMultiplayerStore.getState().isMultiplayerActive;
 
     raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
     const ray = raycaster.current.ray;
@@ -187,54 +184,83 @@ export const PlayerController: React.FC = () => {
     let hitPoint: [number, number, number] | null = null;
     let isHeadshot = false;
 
-    // Precision Universal Ray-to-Capsule Hit Detection for Multiplayer (Flawless at 1m to 200m)
+    // 1. Direct Three.js Mesh Raycasting (WYSIWYG Hit Detection)
     if (isMultiplayerActive) {
-      const remotePlayers = useMultiplayerStore.getState().remotePlayers;
-      let closestHitDist = Infinity;
+      const intersects = raycaster.current.intersectObjects(scene.children, true);
+      for (const item of intersects) {
+        let curr: THREE.Object3D | null = item.object;
+        let tid: string | null = null;
+        let isHs = false;
+        let isRemote = false;
 
-      for (const p of Object.values(remotePlayers)) {
-        if (!p.isAlive) continue;
-        const pPos = p.position || [0, 1.62, 0];
-        const px = pPos[0];
-        const pz = pPos[2];
-        const ox = ray.origin.x;
-        const oy = ray.origin.y;
-        const oz = ray.origin.z;
-        const dx = ray.direction.x;
-        const dy = ray.direction.y;
-        const dz = ray.direction.z;
+        while (curr) {
+          if (curr.userData) {
+            if (curr.userData.targetId) {
+              tid = curr.userData.targetId;
+              if (curr.userData.isHeadshot) isHs = true;
+              if (curr.userData.isRemotePlayer) isRemote = true;
+            }
+          }
+          curr = curr.parent;
+        }
 
-        // 2D distance along horizontal ray direction
-        const vx = px - ox;
-        const vz = pz - oz;
-        const horizontalDirLenSq = dx * dx + dz * dz;
-        if (horizontalDirLenSq < 1e-6) continue;
+        if (tid && isRemote) {
+          const remotePlayer = useMultiplayerStore.getState().remotePlayers[tid];
+          if (remotePlayer && remotePlayer.isAlive) {
+            hitRemotePlayerId = tid;
+            hitPoint = [item.point.x, item.point.y, item.point.z];
+            isHeadshot = isHs || item.point.y >= 1.35;
+            break;
+          }
+        }
+      }
 
-        const tClosest = (vx * dx + vz * dz) / horizontalDirLenSq;
-        if (tClosest <= 0 || tClosest >= 200) continue;
+      // 2. Mathematical Ray-to-Capsule Fallback (for wide-angle grazing shots)
+      if (!hitRemotePlayerId) {
+        const remotePlayers = useMultiplayerStore.getState().remotePlayers;
+        let closestHitDist = Infinity;
 
-        const rayPtX = ox + tClosest * dx;
-        const rayPtY = oy + tClosest * dy;
-        const rayPtZ = oz + tClosest * dz;
+        for (const p of Object.values(remotePlayers)) {
+          if (!p.isAlive) continue;
+          const pPos = p.position || [0, 1.62, 0];
+          const px = pPos[0];
+          const pz = pPos[2];
+          const ox = ray.origin.x;
+          const oy = ray.origin.y;
+          const oz = ray.origin.z;
+          const dx = ray.direction.x;
+          const dy = ray.direction.y;
+          const dz = ray.direction.z;
 
-        const distXZ = Math.hypot(rayPtX - px, rayPtZ - pz);
+          const vx = px - ox;
+          const vz = pz - oz;
+          const horizontalDirLenSq = dx * dx + dz * dz;
+          if (horizontalDirLenSq < 1e-6) continue;
 
-        // Generous competitive hit radius (0.58m) covering full humanoid width
-        const hitRadius = 0.58;
-        const isHeightValid = rayPtY >= -0.05 && rayPtY <= 1.95;
+          const tClosest = (vx * dx + vz * dz) / horizontalDirLenSq;
+          if (tClosest <= 0 || tClosest >= 200) continue;
 
-        if (distXZ <= hitRadius && isHeightValid) {
-          if (tClosest < closestHitDist) {
-            closestHitDist = tClosest;
-            hitRemotePlayerId = p.id;
-            hitPoint = [rayPtX, rayPtY, rayPtZ];
-            isHeadshot = rayPtY >= 1.35;
+          const rayPtX = ox + tClosest * dx;
+          const rayPtY = oy + tClosest * dy;
+          const rayPtZ = oz + tClosest * dz;
+
+          const distXZ = Math.hypot(rayPtX - px, rayPtZ - pz);
+          const hitRadius = 0.58;
+          const isHeightValid = rayPtY >= -0.05 && rayPtY <= 1.95;
+
+          if (distXZ <= hitRadius && isHeightValid) {
+            if (tClosest < closestHitDist) {
+              closestHitDist = tClosest;
+              hitRemotePlayerId = p.id;
+              hitPoint = [rayPtX, rayPtY, rayPtZ];
+              isHeadshot = rayPtY >= 1.35;
+            }
           }
         }
       }
     }
 
-    // 1. MULTIPLAYER REMOTE PLAYER HIT (Instant 0ms Feedback)
+    // MULTIPLAYER REMOTE PLAYER HIT
     if (hitRemotePlayerId && hitPoint) {
       const damage = currentSlot === 'vandal' 
         ? (isHeadshot ? 160 : 40)
@@ -242,21 +268,10 @@ export const PlayerController: React.FC = () => {
         ? (isHeadshot ? 145 : 55)
         : 75;
 
-      // Optimistic instant local health reduction (0ms latency!)
-      const targetPlayer = useMultiplayerStore.getState().remotePlayers[hitRemotePlayerId];
-      if (targetPlayer) {
-        const nextHp = Math.max(0, targetPlayer.health - damage);
-        useMultiplayerStore.getState().updateRemotePlayer({
-          id: hitRemotePlayerId,
-          health: nextHp,
-          isAlive: nextHp > 0
-        });
-      }
-
       multiplayerService.sendDamage(hitRemotePlayerId, damage, isHeadshot, currentSlot);
       soundEngine.playHitSound(1, isHeadshot);
       useGameStore.getState().addFloatingText(
-        isHeadshot ? '💥 160 CRIT!' : `-${damage}`,
+        isHeadshot ? '💥 160 HEADSHOT!' : `-${damage}`,
         hitPoint,
         isHeadshot ? '#ff0055' : '#00f0ff'
       );

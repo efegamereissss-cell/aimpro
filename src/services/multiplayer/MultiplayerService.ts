@@ -35,7 +35,7 @@ class MultiplayerService {
       for (const [key, ts] of this.seenPackets) {
         if (ts < cutoff) this.seenPackets.delete(key);
       }
-    }, 5000);
+    }, 4000);
   }
 
   public connect(roomCode: string = 'aimpro-global-dm') {
@@ -108,7 +108,6 @@ class MultiplayerService {
     });
   }
 
-  // Each packet gets a unique ID for deduplication
   private packetCounter = 0;
   public sendPacket(type: NetworkMessageType, payload: any) {
     const store = useMultiplayerStore.getState();
@@ -123,19 +122,19 @@ class MultiplayerService {
 
     const serialized = JSON.stringify(packet);
 
-    // Same-device / same-browser instantaneous sync
+    // 1. Same-device / same-browser instant message
     if (this.broadcastChannel) {
       try { this.broadcastChannel.postMessage(packet); } catch (_e) {}
     }
 
-    // Global network pub/sub
+    // 2. Global network pub/sub
     if (this.client && this.client.connected) {
       try { this.client.publish(this.currentTopic, serialized, { qos: 0 }); } catch (_e) {}
     }
   }
 
   /**
-   * High-Performance Throttled Position Broadcast (20Hz / 50ms)
+   * 30Hz Authoritative Movement Broadcast (every 33ms)
    */
   public broadcastLocalState(
     position: [number, number, number],
@@ -150,7 +149,7 @@ class MultiplayerService {
     store.setLocalTransform(position, rotation, velocity);
 
     const now = Date.now();
-    if (now - this.lastStateBroadcast < 50) return;
+    if (now - this.lastStateBroadcast < 33) return;
     this.lastStateBroadcast = now;
 
     this.sendPacket('PLAYER_STATE', {
@@ -215,12 +214,10 @@ class MultiplayerService {
     const store = useMultiplayerStore.getState();
     if (!packet || !packet.senderId || packet.senderId === store.localId) return;
 
-    // === DEDUPLICATION === 
-    // The same packet arrives via BOTH BroadcastChannel (instant) and MQTT (delayed).
-    // We must process it exactly ONCE.
+    // === PACKET DEDUPLICATION ===
     const pktId = (packet as any).pktId as string | undefined;
     if (pktId) {
-      if (this.seenPackets.has(pktId)) return; // already processed!
+      if (this.seenPackets.has(pktId)) return; // discard duplicate
       this.seenPackets.set(pktId, Date.now());
     }
 
@@ -244,7 +241,7 @@ class MultiplayerService {
           ping: 15
         });
 
-        // Reply so newcomer discovers us
+        // Reply with our own local state
         this.sendPacket('PLAYER_STATE', {
           id: store.localId,
           nickname: store.nickname,
@@ -265,6 +262,12 @@ class MultiplayerService {
 
       case 'PLAYER_STATE': {
         const p = packet.payload;
+        const existing = store.remotePlayers[p.id];
+        
+        // CRITICAL: If remote player is dead on our side, do NOT resurrect them from a regular PLAYER_STATE packet!
+        // Only PLAYER_RESPAWN can bring them back to life.
+        const isAliveValue = existing && !existing.isAlive ? false : (p.isAlive !== undefined ? p.isAlive : true);
+
         store.updateRemotePlayer({
           id: p.id,
           nickname: p.nickname,
@@ -274,9 +277,9 @@ class MultiplayerService {
           rotation: p.rotation && Array.isArray(p.rotation) ? p.rotation : [0, 0, 0],
           velocity: p.velocity && Array.isArray(p.velocity) ? p.velocity : [0, 0, 0],
           activeWeapon: p.activeWeapon || 'vandal',
-          health: p.health !== undefined ? p.health : 100,
+          health: existing && !existing.isAlive ? 0 : (p.health !== undefined ? p.health : 100),
           maxHealth: 100,
-          isAlive: p.isAlive !== undefined ? p.isAlive : true,
+          isAlive: isAliveValue,
           isJumping: p.isJumping || false,
           kills: p.kills || 0,
           deaths: p.deaths || 0,
@@ -287,9 +290,10 @@ class MultiplayerService {
 
       case 'PLAYER_SHOOT': {
         const { weapon, origin, direction } = packet.payload;
-        // Play Chaos Vandal sound for rifle shots
         if (weapon === 'knife') {
           soundEngine.playKnifeSlash();
+        } else if (weapon === 'sheriff') {
+          soundEngine.playGunshot('pistol');
         } else {
           soundEngine.playChaosVandal();
         }
@@ -297,9 +301,9 @@ class MultiplayerService {
         if (origin && direction && weapon !== 'knife') {
           const from = origin as [number, number, number];
           const to = [
-            from[0] + direction[0] * 60,
-            from[1] + direction[1] * 60,
-            from[2] + direction[2] * 60
+            from[0] + direction[0] * 70,
+            from[1] + direction[1] * 70,
+            from[2] + direction[2] * 70
           ] as [number, number, number];
           useGameStore.getState().addBulletTracer(from, to, '#00f0ff');
         }
@@ -309,7 +313,7 @@ class MultiplayerService {
       case 'PLAYER_DAMAGE': {
         const { attackerId, attackerName, attackerColor, targetId, damage, isHeadshot, weapon } = packet.payload;
         
-        // Only process if WE are the target and alive
+        // Target processes damage authoritatively
         if (targetId === store.localId && store.isAlive) {
           const { newHealth, isDead } = store.updateLocalHealth(damage);
           soundEngine.playHitSound(1, isHeadshot);
@@ -344,17 +348,20 @@ class MultiplayerService {
       case 'PLAYER_DEATH': {
         const { killerId, killerName, killerColor, victimId, victimName, victimColor, weapon, isHeadshot } = packet.payload;
 
+        // Victim is unconditionally marked dead
         store.updateRemotePlayer({
           id: victimId,
           health: 0,
           isAlive: false
         });
 
+        // Killer gets kill reward & banner
         if (killerId === store.localId) {
           store.incrementLocalKill();
           soundEngine.playKillBannerSound(store.streak);
         }
 
+        // Add to killfeed
         store.addKillfeedEntry({
           killerId,
           killerName,
@@ -389,7 +396,6 @@ class MultiplayerService {
   private startStaleCleanup() {
     if (this.cleanupInterval) clearInterval(this.cleanupInterval);
 
-    // Remove peers who haven't sent data in 15 seconds
     this.cleanupInterval = window.setInterval(() => {
       if (this.isDestroyed) return;
       const store = useMultiplayerStore.getState();
@@ -401,7 +407,7 @@ class MultiplayerService {
           store.removeRemotePlayer(player.id);
         }
       });
-    }, 5000);
+    }, 4000);
   }
 
   public disconnect() {
