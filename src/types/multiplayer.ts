@@ -54,4 +54,5 @@ export interface NetworkPacket {
   senderId: string;
   payload: any;
   timestamp: number;
+  pktId?: string;
 }

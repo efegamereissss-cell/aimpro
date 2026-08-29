@@ -165,7 +165,7 @@ export const PlayerController: React.FC = () => {
     } else if (currentSlot === 'sheriff') {
       soundEngine.playGunshot('pistol');
     } else {
-      soundEngine.playGunshot('rifle');
+      soundEngine.playChaosVandal();
     }
 
     const isMultiplayerActive = useMultiplayerStore.getState().isMultiplayerActive;

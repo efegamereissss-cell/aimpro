@@ -427,6 +427,68 @@ class ProceduralSoundEngine {
       // ignore
     }
   }
+
+  /**
+   * Chaos Vandal — Deep aggressive synthesized gunshot
+   * Layered: Sub punch slam + Metallic crack + Noise burst tail
+   */
+  public playChaosVandal() {
+    try {
+      this.init();
+      if (!this.ctx || !this.masterGain) return;
+
+      const now = this.ctx.currentTime;
+      const vol = this.gunVolume * 0.55;
+
+      // 1. Deep sub-bass punch slam (40Hz → 20Hz)
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(140, now);
+      subOsc.frequency.exponentialRampToValueAtTime(28, now + 0.12);
+      subGain.gain.setValueAtTime(vol * 1.4, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      subOsc.connect(subGain);
+      subGain.connect(this.masterGain);
+      subOsc.start(now);
+      subOsc.stop(now + 0.16);
+
+      // 2. Metallic crack transient (square wave chirp 1800Hz → 200Hz)
+      const crackOsc = this.ctx.createOscillator();
+      const crackGain = this.ctx.createGain();
+      crackOsc.type = 'square';
+      crackOsc.frequency.setValueAtTime(1800, now);
+      crackOsc.frequency.exponentialRampToValueAtTime(200, now + 0.03);
+      crackGain.gain.setValueAtTime(vol * 0.35, now);
+      crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      crackOsc.connect(crackGain);
+      crackGain.connect(this.masterGain);
+      crackOsc.start(now);
+      crackOsc.stop(now + 0.05);
+
+      // 3. White noise burst tail (mechanical release)
+      const bufLen = Math.floor(this.ctx.sampleRate * 0.1);
+      const noiseBuf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+      const noiseSrc = this.ctx.createBufferSource();
+      noiseSrc.buffer = noiseBuf;
+      const noiseFilter = this.ctx.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(2200, now);
+      noiseFilter.Q.setValueAtTime(1.5, now);
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(vol * 0.5, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      noiseSrc.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(this.masterGain);
+      noiseSrc.start(now);
+      noiseSrc.stop(now + 0.1);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export const soundEngine = new ProceduralSoundEngine();
