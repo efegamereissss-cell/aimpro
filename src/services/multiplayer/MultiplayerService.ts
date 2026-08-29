@@ -1,32 +1,8 @@
 import mqtt, { MqttClient } from 'mqtt';
-import { NetworkPacket, NetworkMessageType, HatType } from '../../types/multiplayer';
+import { NetworkPacket, NetworkMessageType } from '../../types/multiplayer';
 import { useMultiplayerStore } from '../../store/useMultiplayerStore';
 import { useGameStore } from '../../store/useGameStore';
 import { soundEngine } from '../../audio/SoundEngine';
-
-export interface TransformSnapshot {
-  time: number; // local performance.now()
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-  pitch: number;
-  vx: number;
-  vy: number;
-  vz: number;
-}
-
-export interface RemotePlayerLiveBuffer {
-  id: string;
-  snapshots: TransformSnapshot[];
-  currentPos: [number, number, number];
-  currentYaw: number;
-  currentPitch: number;
-  currentVel: [number, number, number];
-  health: number;
-  isAlive: boolean;
-  lastPacketTime: number;
-}
 
 class MultiplayerService {
   private client: MqttClient | null = null;
@@ -38,38 +14,35 @@ class MultiplayerService {
   private lastStateBroadcast = 0;
   private packetCounter = 0;
 
-  // Direct fast memory buffer for all remote players (bypasses React render loop)
-  public liveBuffers = new Map<string, RemotePlayerLiveBuffer>();
-
-  // Deduplication
+  // Packet deduplication map
   private seenPackets = new Map<string, number>();
-  private seenCleanupTimer: number | null = null;
 
   public init() {
     if (typeof window === 'undefined') return;
 
     try {
-      this.broadcastChannel = new BroadcastChannel('aimpro-mp-network-v2');
+      this.broadcastChannel = new BroadcastChannel('aimpro-dm-v3');
       this.broadcastChannel.onmessage = (event: MessageEvent<NetworkPacket>) => {
         this.handleIncomingPacket(event.data);
       };
     } catch (e) {
-      console.warn('[Multiplayer] BroadcastChannel unavailable:', e);
+      console.warn('[Multiplayer] BroadcastChannel not supported:', e);
     }
 
-    this.seenCleanupTimer = window.setInterval(() => {
+    // Clean up seen packets every 5 seconds
+    window.setInterval(() => {
       const cutoff = Date.now() - 3000;
       for (const [key, ts] of this.seenPackets) {
         if (ts < cutoff) this.seenPackets.delete(key);
       }
-    }, 4000);
+    }, 5000);
   }
 
   public connect(roomCode: string = 'aimpro-global-dm') {
     this.disconnect();
     this.isDestroyed = false;
     this.currentRoom = roomCode.trim().toLowerCase();
-    this.currentTopic = `aimpro/dm/v2_${this.currentRoom.replace(/[^a-z0-9_-]/g, '_')}`;
+    this.currentTopic = `aimpro/dm/v3_${this.currentRoom.replace(/[^a-z0-9_-]/g, '_')}`;
 
     const store = useMultiplayerStore.getState();
     store.setConnecting(true, null);
@@ -110,7 +83,7 @@ class MultiplayerService {
         store.setConnected(true, this.currentRoom);
       });
     } catch (err) {
-      console.warn('[Multiplayer] MQTT init failed:', err);
+      console.warn('[Multiplayer] MQTT init error:', err);
       store.setConnected(true, this.currentRoom);
     }
 
@@ -157,7 +130,7 @@ class MultiplayerService {
   }
 
   /**
-   * Continuous 30Hz State Broadcast (every 33ms)
+   * Broadcast state at clean 30Hz (every 33ms)
    */
   public broadcastLocalState(
     position: [number, number, number],
@@ -189,8 +162,7 @@ class MultiplayerService {
       isAlive: store.isAlive,
       isJumping,
       kills: store.kills,
-      deaths: store.deaths,
-      ping: 15
+      deaths: store.deaths
     });
   }
 
@@ -233,107 +205,6 @@ class MultiplayerService {
     });
   }
 
-  /**
-   * Gold-Standard Valve/CS:GO Snapshot Interpolation with Extrapolation Fallback
-   * Computes the mathematically exact, 100% continuous position at 144Hz.
-   */
-  public getInterpolatedTransform(playerId: string, renderDelayMs: number = 50): {
-    x: number;
-    y: number;
-    z: number;
-    yaw: number;
-    pitch: number;
-    vx: number;
-    vy: number;
-    vz: number;
-    health: number;
-    isAlive: boolean;
-  } | null {
-    const buf = this.liveBuffers.get(playerId);
-    if (!buf || buf.snapshots.length === 0) return null;
-
-    const snaps = buf.snapshots;
-    const now = performance.now();
-    const renderTime = now - renderDelayMs;
-
-    // If only 1 snapshot or render time is older than the oldest snapshot
-    if (snaps.length === 1 || renderTime <= snaps[0].time) {
-      const s = snaps[0];
-      return {
-        x: s.x,
-        y: s.y,
-        z: s.z,
-        yaw: s.yaw,
-        pitch: s.pitch,
-        vx: s.vx,
-        vy: s.vy,
-        vz: s.vz,
-        health: buf.health,
-        isAlive: buf.isAlive
-      };
-    }
-
-    const latest = snaps[snaps.length - 1];
-
-    // If renderTime is ahead of newest snapshot: smooth dead-reckoning extrapolation
-    if (renderTime >= latest.time) {
-      const elapsedSec = Math.min(0.2, (renderTime - latest.time) / 1000.0);
-      return {
-        x: latest.x + latest.vx * elapsedSec,
-        y: latest.y + latest.vy * elapsedSec,
-        z: latest.z + latest.vz * elapsedSec,
-        yaw: latest.yaw,
-        pitch: latest.pitch,
-        vx: latest.vx,
-        vy: latest.vy,
-        vz: latest.vz,
-        health: buf.health,
-        isAlive: buf.isAlive
-      };
-    }
-
-    // Between snapshots: Perfect linear interpolation (Hermite/Lerp)
-    for (let i = 0; i < snaps.length - 1; i++) {
-      const s0 = snaps[i];
-      const s1 = snaps[i + 1];
-      if (renderTime >= s0.time && renderTime <= s1.time) {
-        const span = s1.time - s0.time;
-        const alpha = span > 0.0001 ? (renderTime - s0.time) / span : 0;
-
-        // Shortest arc angle lerp for yaw
-        let dYaw = (s1.yaw - s0.yaw) % (Math.PI * 2);
-        if (dYaw > Math.PI) dYaw -= Math.PI * 2;
-        if (dYaw < -Math.PI) dYaw += Math.PI * 2;
-
-        return {
-          x: s0.x + (s1.x - s0.x) * alpha,
-          y: s0.y + (s1.y - s0.y) * alpha,
-          z: s0.z + (s1.z - s0.z) * alpha,
-          yaw: s0.yaw + dYaw * alpha,
-          pitch: s0.pitch + (s1.pitch - s0.pitch) * alpha,
-          vx: s0.vx + (s1.vx - s0.vx) * alpha,
-          vy: s0.vy + (s1.vy - s0.vy) * alpha,
-          vz: s0.vz + (s1.vz - s0.vz) * alpha,
-          health: buf.health,
-          isAlive: buf.isAlive
-        };
-      }
-    }
-
-    return {
-      x: latest.x,
-      y: latest.y,
-      z: latest.z,
-      yaw: latest.yaw,
-      pitch: latest.pitch,
-      vx: latest.vx,
-      vy: latest.vy,
-      vz: latest.vz,
-      health: buf.health,
-      isAlive: buf.isAlive
-    };
-  }
-
   private handleIncomingPacket(packet: NetworkPacket) {
     const store = useMultiplayerStore.getState();
     if (!packet || !packet.senderId || packet.senderId === store.localId) return;
@@ -348,49 +219,14 @@ class MultiplayerService {
     switch (packet.type) {
       case 'PLAYER_JOIN': {
         const p = packet.payload;
-        const pPos = p.position || [0, 1.62, 0];
-        const pRot = p.rotation || [0, 0, 0];
-        const pVel = p.velocity || [0, 0, 0];
-        const groundY = Math.max(0, pPos[1] - 1.62);
-
-        // Register in fast live buffer
-        let buf = this.liveBuffers.get(p.id);
-        if (!buf) {
-          buf = {
-            id: p.id,
-            snapshots: [],
-            currentPos: [pPos[0], groundY, pPos[2]],
-            currentYaw: pRot[1] || 0,
-            currentPitch: pRot[0] || 0,
-            currentVel: [pVel[0], pVel[1], pVel[2]],
-            health: p.health !== undefined ? p.health : 100,
-            isAlive: true,
-            lastPacketTime: performance.now()
-          };
-          this.liveBuffers.set(p.id, buf);
-        }
-
-        buf.snapshots.push({
-          time: performance.now(),
-          x: pPos[0],
-          y: groundY,
-          z: pPos[2],
-          yaw: pRot[1] || 0,
-          pitch: pRot[0] || 0,
-          vx: pVel[0],
-          vy: pVel[1],
-          vz: pVel[2]
-        });
-
-        // Register in React store for mounting the model
         store.updateRemotePlayer({
           id: p.id,
           nickname: p.nickname || 'Player',
           color: p.color || '#00f0ff',
           hatType: p.hatType || 'triangle',
-          position: pPos,
-          rotation: pRot,
-          velocity: pVel,
+          position: p.position && Array.isArray(p.position) ? p.position : [0, 1.62, 0],
+          rotation: p.rotation && Array.isArray(p.rotation) ? p.rotation : [0, 0, 0],
+          velocity: p.velocity && Array.isArray(p.velocity) ? p.velocity : [0, 0, 0],
           activeWeapon: p.activeWeapon || 'vandal',
           health: 100,
           maxHealth: 100,
@@ -418,64 +254,26 @@ class MultiplayerService {
 
       case 'PLAYER_STATE': {
         const p = packet.payload;
-        const pPos = p.position || [0, 1.62, 0];
-        const pRot = p.rotation || [0, 0, 0];
-        const pVel = p.velocity || [0, 0, 0];
-        const groundY = Math.max(0, pPos[1] - 1.62);
-        const now = performance.now();
+        const existing = store.remotePlayers[p.id];
+        
+        // If remote player is dead on our side, do NOT revive until PLAYER_RESPAWN arrives
+        const isAliveVal = existing && !existing.isAlive ? false : (p.isAlive !== undefined ? p.isAlive : true);
 
-        let buf = this.liveBuffers.get(p.id);
-        if (!buf) {
-          buf = {
-            id: p.id,
-            snapshots: [],
-            currentPos: [pPos[0], groundY, pPos[2]],
-            currentYaw: pRot[1] || 0,
-            currentPitch: pRot[0] || 0,
-            currentVel: [pVel[0], pVel[1], pVel[2]],
-            health: p.health !== undefined ? p.health : 100,
-            isAlive: p.isAlive !== undefined ? p.isAlive : true,
-            lastPacketTime: now
-          };
-          this.liveBuffers.set(p.id, buf);
-
-          // Mount component in React if not already mounted
-          store.updateRemotePlayer({
-            id: p.id,
-            nickname: p.nickname || 'Player',
-            color: p.color || '#00f0ff',
-            hatType: p.hatType || 'triangle',
-            position: pPos,
-            rotation: pRot,
-            velocity: pVel,
-            activeWeapon: p.activeWeapon || 'vandal',
-            health: p.health || 100,
-            maxHealth: 100,
-            isAlive: true
-          });
-        }
-
-        buf.lastPacketTime = now;
-        if (buf.isAlive) {
-          buf.health = p.health !== undefined ? p.health : buf.health;
-        }
-
-        // Add snapshot to buffer (keep last 8 snapshots)
-        buf.snapshots.push({
-          time: now,
-          x: pPos[0],
-          y: groundY,
-          z: pPos[2],
-          yaw: pRot[1] || 0,
-          pitch: pRot[0] || 0,
-          vx: pVel[0],
-          vy: pVel[1],
-          vz: pVel[2]
+        store.updateRemotePlayer({
+          id: p.id,
+          nickname: p.nickname || existing?.nickname || 'Player',
+          color: p.color || existing?.color || '#00f0ff',
+          hatType: p.hatType || existing?.hatType || 'triangle',
+          position: p.position && Array.isArray(p.position) ? p.position : [0, 1.62, 0],
+          rotation: p.rotation && Array.isArray(p.rotation) ? p.rotation : [0, 0, 0],
+          velocity: p.velocity && Array.isArray(p.velocity) ? p.velocity : [0, 0, 0],
+          activeWeapon: p.activeWeapon || 'vandal',
+          health: existing && !existing.isAlive ? 0 : (p.health !== undefined ? p.health : 100),
+          maxHealth: 100,
+          isAlive: isAliveVal,
+          kills: p.kills || 0,
+          deaths: p.deaths || 0
         });
-
-        if (buf.snapshots.length > 8) {
-          buf.snapshots.shift();
-        }
         break;
       }
 
@@ -538,12 +336,6 @@ class MultiplayerService {
       case 'PLAYER_DEATH': {
         const { killerId, killerName, killerColor, victimId, victimName, victimColor, weapon, isHeadshot } = packet.payload;
 
-        const buf = this.liveBuffers.get(victimId);
-        if (buf) {
-          buf.health = 0;
-          buf.isAlive = false;
-        }
-
         store.updateRemotePlayer({
           id: victimId,
           health: 0,
@@ -570,29 +362,9 @@ class MultiplayerService {
 
       case 'PLAYER_RESPAWN': {
         const { id, position } = packet.payload;
-        const pPos = position || [0, 1.62, 0];
-        const groundY = Math.max(0, pPos[1] - 1.62);
-
-        const buf = this.liveBuffers.get(id);
-        if (buf) {
-          buf.health = 100;
-          buf.isAlive = true;
-          buf.snapshots = [{
-            time: performance.now(),
-            x: pPos[0],
-            y: groundY,
-            z: pPos[2],
-            yaw: 0,
-            pitch: 0,
-            vx: 0,
-            vy: 0,
-            vz: 0
-          }];
-        }
-
         store.updateRemotePlayer({
           id,
-          position: pPos,
+          position: (position && Array.isArray(position) ? position : [0, 1.62, 0]) as [number, number, number],
           health: 100,
           isAlive: true
         });
@@ -600,7 +372,6 @@ class MultiplayerService {
       }
 
       case 'PLAYER_LEAVE': {
-        this.liveBuffers.delete(packet.payload.id);
         store.removeRemotePlayer(packet.payload.id);
         break;
       }
@@ -615,13 +386,12 @@ class MultiplayerService {
       const store = useMultiplayerStore.getState();
       if (!store.isMultiplayerActive) return;
 
-      const now = performance.now();
-      for (const [id, buf] of this.liveBuffers) {
-        if (now - buf.lastPacketTime > 15000) {
-          this.liveBuffers.delete(id);
-          store.removeRemotePlayer(id);
+      const now = Date.now();
+      Object.values(store.remotePlayers).forEach((player) => {
+        if (now - player.lastUpdated > 15000) {
+          store.removeRemotePlayer(player.id);
         }
-      }
+      });
     }, 4000);
   }
 
@@ -642,7 +412,6 @@ class MultiplayerService {
       this.client = null;
     }
 
-    this.liveBuffers.clear();
     store.setConnected(false);
     store.clearRemotePlayers();
   }
