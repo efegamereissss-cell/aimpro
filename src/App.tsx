@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useGameStore } from './store/useGameStore';
+import { useMultiplayerStore } from './store/useMultiplayerStore';
+import { multiplayerService } from './services/multiplayer/MultiplayerService';
 import { ALL_SCENARIOS } from './data/scenarios';
 import { FPSScene } from './components/canvas/FPSScene';
 import { GameHUD } from './components/hud/GameHUD';
+import { DeathmatchHUD } from './components/hud/DeathmatchHUD';
 import { CountdownOverlay } from './components/hud/CountdownOverlay';
 import { ResultScreen } from './components/hud/ResultScreen';
 import { MainMenu } from './components/menus/MainMenu';
@@ -13,6 +16,7 @@ import { StatsModal } from './components/menus/StatsModal';
 import { CustomScenarioModal } from './components/menus/CustomScenarioModal';
 import { ReactionBenchmarkModal } from './components/menus/ReactionBenchmarkModal';
 import { PlaylistModal } from './components/menus/PlaylistModal';
+import { MultiplayerLobbyModal } from './components/menus/MultiplayerLobbyModal';
 import { PlaylistConfig } from './data/playlists';
 
 export const App: React.FC = () => {
@@ -23,6 +27,9 @@ export const App: React.FC = () => {
   const restartGame = useGameStore(state => state.restartGame);
   const exitToMenu = useGameStore(state => state.exitToMenu);
 
+  const isMultiplayerActive = useMultiplayerStore(state => state.isMultiplayerActive);
+  const setMultiplayerActive = useMultiplayerStore(state => state.setMultiplayerActive);
+
   // Menu navigation states
   const [currentMenu, setCurrentMenu] = useState<'main' | 'browser'>('main');
   const [showSettings, setShowSettings] = useState(false);
@@ -30,12 +37,15 @@ export const App: React.FC = () => {
   const [showStudio, setShowStudio] = useState(false);
   const [showReactionTest, setShowReactionTest] = useState(false);
   const [showPlaylists, setShowPlaylists] = useState(false);
+  const [showMultiplayerLobby, setShowMultiplayerLobby] = useState(false);
 
   // Active playlist session
   const [activePlaylist, setActivePlaylist] = useState<PlaylistConfig | null>(null);
   const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState(0);
 
   const handleSelectScenario = (scenario: any) => {
+    setMultiplayerActive(false);
+    multiplayerService.disconnect();
     setScenario(scenario);
     startGame();
     const canvas = document.querySelector('canvas');
@@ -57,6 +67,14 @@ export const App: React.FC = () => {
     handleSelectScenario(firstScenario);
   };
 
+  const handleExitToMenu = () => {
+    if (isMultiplayerActive) {
+      multiplayerService.disconnect();
+      setMultiplayerActive(false);
+    }
+    exitToMenu();
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#07090e] font-sans select-none text-cyber-text">
       {/* 3D FPS Three.js Canvas Scene */}
@@ -75,10 +93,17 @@ export const App: React.FC = () => {
                 onOpenStudio={() => setShowStudio(true)}
                 onOpenStats={() => setShowStats(true)}
                 onOpenSettings={() => setShowSettings(true)}
+                onOpenMultiplayer={() => setShowMultiplayerLobby(true)}
               />
 
               {/* Extra Floating Quick Tools Bar */}
               <div className="max-w-7xl mx-auto w-full px-4 md:px-8 flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowMultiplayerLobby(true)}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-black text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5"
+                >
+                  🌐 Online DM Lobi
+                </button>
                 <button
                   onClick={() => setShowPlaylists(true)}
                   className="px-4 py-2 rounded-xl bg-cyber-card hover:bg-cyber-primary hover:text-black text-white text-xs font-bold transition-all border border-cyber-border shadow-md"
@@ -113,7 +138,12 @@ export const App: React.FC = () => {
       )}
 
       {/* 2. PLAYING IN-GAME HUD */}
-      {gameStatus === 'playing' && <GameHUD />}
+      {gameStatus === 'playing' && (
+        <>
+          <GameHUD />
+          {isMultiplayerActive && <DeathmatchHUD />}
+        </>
+      )}
 
       {/* 3. PAUSED STATE */}
       {gameStatus === 'paused' && (
@@ -133,11 +163,11 @@ export const App: React.FC = () => {
             restartGame();
           }}
           onOpenBrowser={() => {
-            exitToMenu();
+            handleExitToMenu();
             setCurrentMenu('browser');
           }}
           onGoHome={() => {
-            exitToMenu();
+            handleExitToMenu();
             setCurrentMenu('main');
           }}
         />
@@ -154,11 +184,11 @@ export const App: React.FC = () => {
             startGame();
           }}
           onOpenBrowser={() => {
-            exitToMenu();
+            handleExitToMenu();
             setCurrentMenu('browser');
           }}
           onGoHome={() => {
-            exitToMenu();
+            handleExitToMenu();
             setCurrentMenu('main');
           }}
         />
@@ -181,6 +211,12 @@ export const App: React.FC = () => {
         <PlaylistModal
           onClose={() => setShowPlaylists(false)}
           onStartPlaylist={handleStartPlaylist}
+        />
+      )}
+      {showMultiplayerLobby && (
+        <MultiplayerLobbyModal
+          isOpen={showMultiplayerLobby}
+          onClose={() => setShowMultiplayerLobby(false)}
         />
       )}
     </div>

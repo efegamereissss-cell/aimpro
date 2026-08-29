@@ -29,7 +29,8 @@ import {
   Swords,
   Sun,
   Moon,
-  Compass
+  Compass,
+  Users
 } from 'lucide-react';
 
 interface MainMenuProps {
@@ -38,6 +39,7 @@ interface MainMenuProps {
   onOpenStudio: () => void;
   onOpenStats: () => void;
   onOpenSettings: () => void;
+  onOpenMultiplayer: () => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -45,7 +47,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onOpenBrowser,
   onOpenStudio,
   onOpenStats,
-  onOpenSettings
+  onOpenSettings,
+  onOpenMultiplayer
 }) => {
   const [activeCategory, setActiveCategory] = useState<Category>('clicking');
 
@@ -178,97 +181,128 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 2. TRIPLE CORE MODES: AIM ÇALIŞMASI | TAKTİKSEL BOT DÜELLOSU | CS 1.6 BHOP */}
+      {/* 2. 4 CORE MODES: AIM ÇALIŞMASI | BOT DÜELLOSU | CS 1.6 BHOP | ONLINE DEATHMATCH */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* CORE MODE 1: AIM ÇALIŞMASI & POLİGON */}
-        <div className="glass-panel p-6 rounded-3xl border border-cyan-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-5 group hover:border-cyan-400 transition-all duration-300 backdrop-blur-xl">
-          <div className="absolute top-0 right-0 w-60 h-60 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-cyan-500/20 transition-all" />
+        <div className="glass-panel p-5 rounded-3xl border border-cyan-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-4 group hover:border-cyan-400 transition-all duration-300 backdrop-blur-xl">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-cyan-500/20 transition-all" />
 
-          <div className="space-y-2.5 relative z-10">
+          <div className="space-y-2 relative z-10">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 tracking-wider">
-                🎯 Mod 1: Poligon & Gridshot
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 tracking-wider">
+                🎯 Mod 1: Poligon
               </span>
-              <span className="text-[11px] font-mono font-bold text-cyber-muted">52 Senaryo</span>
+              <span className="text-[10px] font-mono font-bold text-cyber-muted">52 Senaryo</span>
             </div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight leading-tight drop-shadow-md">
-              Aim Çalışması (Poligon)
+            <h2 className="text-xl font-black text-white uppercase tracking-tight leading-tight">
+              Aim Çalışması
             </h2>
-            <p className="text-xs text-cyber-muted font-medium leading-relaxed">
-              Mikro flick, kafa hizası hassasiyeti, ışın takibi ve hedef değiştirme antrenmanı. 1:1 Valorant Arcane Sheriff & Vandal.
+            <p className="text-[11px] text-cyber-muted font-medium leading-relaxed line-clamp-3">
+              Mikro flick, kafa hizası hassasiyeti ve hedef değiştirme. 1:1 Valorant Sheriff & Vandal.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 relative z-10 pt-2">
+          <div className="relative z-10 pt-1">
             <button
               onClick={onQuickPlay}
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-black py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(0,240,255,0.4)] hover:scale-102"
+              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-black py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(0,240,255,0.4)] hover:scale-102"
             >
-              <Play className="w-4 h-4 fill-current" />
-              Gridshot Başlat
+              <Play className="w-3.5 h-3.5 fill-current" />
+              Gridshot
             </button>
           </div>
         </div>
 
         {/* CORE MODE 2: TAKTİKSEL BOT DÜELLOSU */}
-        <div className="glass-panel p-6 rounded-3xl border border-fuchsia-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-5 group hover:border-fuchsia-400 transition-all duration-300 backdrop-blur-xl">
-          <div className="absolute top-0 right-0 w-60 h-60 bg-fuchsia-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-fuchsia-500/20 transition-all" />
+        <div className="glass-panel p-5 rounded-3xl border border-fuchsia-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-4 group hover:border-fuchsia-400 transition-all duration-300 backdrop-blur-xl">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-fuchsia-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-fuchsia-500/20 transition-all" />
 
-          <div className="space-y-2.5 relative z-10">
+          <div className="space-y-2 relative z-10">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40 tracking-wider flex items-center gap-1">
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40 tracking-wider flex items-center gap-1">
                 <Swords className="w-3 h-3" />
-                🤖 Mod 2: Espor Bot Düellosu
+                🤖 Mod 2: Espor Bot
               </span>
-              <span className="text-[11px] font-mono font-bold text-fuchsia-400">1-Tap Range</span>
+              <span className="text-[10px] font-mono font-bold text-fuchsia-400">1-Tap Haven</span>
             </div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight leading-tight drop-shadow-md">
-              Taktiksel Bot Düellosu
+            <h2 className="text-xl font-black text-white uppercase tracking-tight leading-tight">
+              Bot Düellosu
             </h2>
-            <p className="text-xs text-cyber-muted font-medium leading-relaxed">
-              Siperlerin arkasından ani A/D counter-strafe ile peek atan espor botlarına karşı 1-tap kafa vuruşu ve açı temizleme antrenmanı!
+            <p className="text-[11px] text-cyber-muted font-medium leading-relaxed line-clamp-3">
+              Haven C-Long köşe duvarından ani A/D peek atan 3D Omen botuna karşı 1-tap kafa antrenmanı!
             </p>
           </div>
 
-          <div className="flex items-center gap-2 relative z-10 pt-2">
+          <div className="relative z-10 pt-1">
             <button
               onClick={handleLaunchBotDuel}
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-fuchsia-500 to-indigo-600 hover:from-fuchsia-400 hover:to-indigo-500 text-white py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(217,70,239,0.5)] hover:scale-102"
+              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-fuchsia-500 to-indigo-600 hover:from-fuchsia-400 hover:to-indigo-500 text-white py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(217,70,239,0.5)] hover:scale-102"
             >
-              <Play className="w-4 h-4 fill-current" />
-              Bot Düellosunu Başlat
+              <Play className="w-3.5 h-3.5 fill-current" />
+              Bot Düellosu
             </button>
           </div>
         </div>
 
         {/* CORE MODE 3: CS 1.6 BUNNY HOP PARKURU */}
-        <div className="glass-panel p-6 rounded-3xl border border-emerald-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-5 group hover:border-emerald-400 transition-all duration-300 backdrop-blur-xl">
-          <div className="absolute top-0 right-0 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/20 transition-all" />
+        <div className="glass-panel p-5 rounded-3xl border border-emerald-500/40 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-4 group hover:border-emerald-400 transition-all duration-300 backdrop-blur-xl">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/20 transition-all" />
 
-          <div className="space-y-2.5 relative z-10">
+          <div className="space-y-2 relative z-10">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 tracking-wider flex items-center gap-1">
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 tracking-wider flex items-center gap-1">
                 <Wind className="w-3 h-3 animate-bounce" />
-                🐰 Mod 3: CS 1.6 Movement
+                🐰 Mod 3: CS 1.6
               </span>
-              <span className="text-[11px] font-mono font-bold text-emerald-400">1:1 Bhop</span>
+              <span className="text-[10px] font-mono font-bold text-emerald-400">1:1 Bhop</span>
             </div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight leading-tight drop-shadow-md">
-              Bunny Hop Parkuru
+            <h2 className="text-xl font-black text-white uppercase tracking-tight leading-tight">
+              Bhop Parkuru
             </h2>
-            <p className="text-xs text-cyber-muted font-medium leading-relaxed">
-              Orijinal CS 1.6 Air-Acceleration fiziği! Havada A / D ve fare çevirerek 20 engelli parkuru yüksek hızda tamamlayın.
+            <p className="text-[11px] text-cyber-muted font-medium leading-relaxed line-clamp-3">
+              Orijinal CS 1.6 Air-Acceleration fiziği! Havada strafe yaparak 20 engelli parkuru geçin.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 relative z-10 pt-2">
+          <div className="relative z-10 pt-1">
             <button
               onClick={handleLaunchBhop}
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 text-black py-3.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(16,185,129,0.5)] hover:scale-102"
+              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500 text-black py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_15px_rgba(16,185,129,0.5)] hover:scale-102"
             >
-              <Play className="w-4 h-4 fill-current" />
-              Parkuru Başlat
+              <Play className="w-3.5 h-3.5 fill-current" />
+              Bhop Başlat
+            </button>
+          </div>
+        </div>
+
+        {/* CORE MODE 4: ONLINE MULTIPLAYER DEATHMATCH (REDMATCH 2 STYLE) */}
+        <div className="glass-panel p-5 rounded-3xl border border-amber-500/50 shadow-2xl relative overflow-hidden flex flex-col justify-between space-y-4 group hover:border-amber-400 transition-all duration-300 backdrop-blur-xl bg-gradient-to-b from-amber-500/5 to-transparent">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/15 rounded-full blur-3xl pointer-events-none group-hover:bg-amber-500/25 transition-all" />
+
+          <div className="space-y-2 relative z-10">
+            <div className="flex items-center justify-between">
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 tracking-wider flex items-center gap-1">
+                <Flame className="w-3 h-3 animate-pulse" />
+                🌐 Mod 4: Çevrimiçi DM
+              </span>
+              <span className="text-[10px] font-mono font-bold text-amber-400">100 HP Can</span>
+            </div>
+            <h2 className="text-xl font-black text-white uppercase tracking-tight leading-tight">
+              Online Deathmatch
+            </h2>
+            <p className="text-[11px] text-cyber-muted font-medium leading-relaxed line-clamp-3">
+              Redmatch 2 tarzı geometrik avatarlarla gerçek oyunculara karşı 100 HP çok oyunculu düello!
+            </p>
+          </div>
+
+          <div className="relative z-10 pt-1">
+            <button
+              onClick={onOpenMultiplayer}
+              className="w-full flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 hover:from-amber-300 hover:to-orange-400 text-black py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(245,158,11,0.5)] hover:scale-102"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Lobiye Katıl
             </button>
           </div>
         </div>

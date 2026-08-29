@@ -8,8 +8,10 @@ import { PlayerController } from './PlayerController';
 import { TargetManager } from './TargetManager';
 import { ParticleSystem } from './ParticleSystem';
 import { FloatingText3D } from './FloatingText3D';
+import { RemotePlayersManager } from './RemotePlayersManager';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useGameStore } from '../../store/useGameStore';
+import { useMultiplayerStore } from '../../store/useMultiplayerStore';
 
 /**
  * Ensures 1:1 Pixel-Perfect Valorant 103° Horizontal FOV projection
@@ -43,6 +45,8 @@ const DynamicValorantCameraManager: React.FC = () => {
 export const FPSScene: React.FC = () => {
   const videoSettings = useSettingsStore(state => state.settings.video);
   const activeScenario = useGameStore(state => state.activeScenario);
+  const isMultiplayerActive = useMultiplayerStore(state => state.isMultiplayerActive);
+
   const isBhopMap = activeScenario.id.includes('bhop');
   const isHavenMap = activeScenario.id === 'tactical_bot_duel_peeking' || (activeScenario.tags && activeScenario.tags.includes('Bot Peeking'));
 
@@ -109,7 +113,8 @@ export const FPSScene: React.FC = () => {
           ) : (
             <Arena />
           )}
-          <TargetManager />
+          {!isMultiplayerActive && <TargetManager />}
+          <RemotePlayersManager />
           <ParticleSystem />
           <FloatingText3D />
           <PlayerController />

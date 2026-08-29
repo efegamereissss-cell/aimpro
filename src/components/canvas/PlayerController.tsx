@@ -7,6 +7,8 @@ import { soundEngine } from '../../audio/SoundEngine';
 import { calculateMouseRadians } from '../../utils/sensitivity';
 import { calculateAirAcceleration } from '../../utils/movementPhysics';
 import { WeaponViewmodel } from './WeaponViewmodel';
+import { useMultiplayerStore } from '../../store/useMultiplayerStore';
+import { multiplayerService } from '../../services/multiplayer/MultiplayerService';
 
 const MAX_PITCH = Math.PI / 2 - 0.01;
 
@@ -119,7 +121,8 @@ export const PlayerController: React.FC = () => {
     if (gameStatusRef.current !== 'playing') return;
 
     const currentScenario = scenarioRef.current;
-    const currentSlot = activeWeaponSlotRef.current;
+    const rawSlot = activeWeaponSlotRef.current;
+    const currentSlot: 'vandal' | 'sheriff' | 'knife' = rawSlot === 'knife' ? 'knife' : rawSlot === 'sheriff' ? 'sheriff' : 'vandal';
     const targets = useGameStore.getState().activeTargets;
     const currentSettings = settingsRef.current;
 
@@ -143,17 +146,37 @@ export const PlayerController: React.FC = () => {
       soundEngine.playGunshot('rifle');
     }
 
+    const isMultiplayerActive = useMultiplayerStore.getState().isMultiplayerActive;
+
     raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
     const ray = raycaster.current.ray;
+    const muzzleWorld = new THREE.Vector3(0.26, -0.21, -0.48).applyMatrix4(camera.matrixWorld);
+
+    if (isMultiplayerActive) {
+      multiplayerService.broadcastShoot(
+        [muzzleWorld.x, muzzleWorld.y, muzzleWorld.z],
+        [ray.direction.x, ray.direction.y, ray.direction.z],
+        currentSlot
+      );
+    }
 
     const intersects = raycaster.current.intersectObjects(scene.children, true);
     let hitTargetId: string | null = null;
+    let hitRemotePlayerId: string | null = null;
     let hitPoint: [number, number, number] | null = null;
     let isHeadshot = false;
 
     for (const item of intersects) {
-      const tid = item.object.userData?.targetId || (item.object.parent && item.object.parent.userData?.targetId);
-      if (tid) {
+      const obj = item.object;
+      const isRemote = obj.userData?.isRemotePlayer || (obj.parent && obj.parent.userData?.isRemotePlayer);
+      const tid = obj.userData?.targetId || (obj.parent && obj.parent.userData?.targetId);
+
+      if (isRemote && tid) {
+        hitRemotePlayerId = tid;
+        hitPoint = [item.point.x, item.point.y, item.point.z];
+        isHeadshot = obj.userData?.isHeadshot || false;
+        break;
+      } else if (tid) {
         hitTargetId = tid;
         hitPoint = [item.point.x, item.point.y, item.point.z];
         isHeadshot = item.point.y > item.object.position.y + 0.15;
@@ -161,6 +184,32 @@ export const PlayerController: React.FC = () => {
       }
     }
 
+    // 1. MULTIPLAYER REMOTE PLAYER HIT
+    if (hitRemotePlayerId && hitPoint) {
+      const damage = currentSlot === 'vandal' 
+        ? (isHeadshot ? 160 : 40)
+        : currentSlot === 'sheriff'
+        ? (isHeadshot ? 145 : 55)
+        : 75;
+
+      multiplayerService.sendDamage(hitRemotePlayerId, damage, isHeadshot, currentSlot);
+      soundEngine.playHitSound(1, isHeadshot);
+      useGameStore.getState().addFloatingText(
+        isHeadshot ? '💥 160 CRIT!' : `-${damage}`,
+        hitPoint,
+        isHeadshot ? '#ff0055' : '#00f0ff'
+      );
+      if (currentSlot !== 'knife') {
+        addBulletTracer(
+          [muzzleWorld.x, muzzleWorld.y, muzzleWorld.z],
+          hitPoint,
+          isHeadshot ? '#ff0055' : '#00f0ff'
+        );
+      }
+      return;
+    }
+
+    // 2. STANDARD TARGET HIT
     if (!hitTargetId && targets.length > 0) {
       for (const target of targets) {
         const center = new THREE.Vector3(...target.position);
@@ -174,8 +223,6 @@ export const PlayerController: React.FC = () => {
         }
       }
     }
-
-    const muzzleWorld = new THREE.Vector3(0.26, -0.21, -0.48).applyMatrix4(camera.matrixWorld);
 
     if (hitTargetId && hitPoint) {
       registerShot(hitTargetId, hitPoint, isHeadshot);
@@ -324,6 +371,10 @@ export const PlayerController: React.FC = () => {
       if (e.code === 'KeyR') {
         restartGame();
       }
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        useMultiplayerStore.getState().setScoreboardOpen(true);
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -332,6 +383,10 @@ export const PlayerController: React.FC = () => {
       if (e.code === 'KeyA') keysRef.current.left = false;
       if (e.code === 'KeyD') keysRef.current.right = false;
       if (e.code === 'Space') keysRef.current.jump = false;
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        useMultiplayerStore.getState().setScoreboardOpen(false);
+      }
     };
 
     const canvas = gl.domElement;
@@ -361,6 +416,38 @@ export const PlayerController: React.FC = () => {
     }
 
     const dt = Math.min(delta, 0.05);
+
+    // =========================================================================
+    // MULTIPLAYER STATE BROADCAST & RESPAWN TIMER
+    // =========================================================================
+    const isMultiplayerActive = useMultiplayerStore.getState().isMultiplayerActive;
+    if (isMultiplayerActive) {
+      const respawnTime = useMultiplayerStore.getState().respawnTimeRemaining;
+      if (respawnTime > 0) {
+        const nextTime = Math.max(0, respawnTime - dt);
+        useMultiplayerStore.getState().setRespawnTimer(nextTime);
+        if (nextTime === 0) {
+          // Respawn at random arena spawn point
+          const rx = (Math.random() - 0.5) * 20;
+          const rz = (Math.random() - 0.5) * 20;
+          posRef.current.set(rx, 1.62, rz);
+          velRef.current.set(0, 0, 0);
+          useMultiplayerStore.getState().respawnLocalPlayer();
+        }
+        return; // Freeze movement while waiting for respawn
+      }
+
+      // Broadcast position at 60Hz
+      const rawSlot = activeWeaponSlotRef.current;
+      const currentSlot: 'vandal' | 'sheriff' | 'knife' = rawSlot === 'knife' ? 'knife' : rawSlot === 'sheriff' ? 'sheriff' : 'vandal';
+      multiplayerService.broadcastLocalState(
+        [posRef.current.x, posRef.current.y, posRef.current.z],
+        [pitchRef.current, yawRef.current, 0],
+        [velRef.current.x, velRef.current.y, velRef.current.z],
+        currentSlot,
+        !isGroundedRef.current
+      );
+    }
 
     // Continuous Beam / Automatic Rifle Auto-Fire
     // Semi-automatic Pistol (Sheriff) and Knife NEVER spray on hold!
