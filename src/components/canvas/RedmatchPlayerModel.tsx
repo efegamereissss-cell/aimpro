@@ -1,8 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { RemotePlayerState, HatType } from '../../types/multiplayer';
+import { multiplayerService } from '../../services/multiplayer/MultiplayerService';
 
 interface RedmatchPlayerModelProps {
   player: RemotePlayerState;
@@ -13,102 +14,56 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
   const leftLegRef = useRef<THREE.Mesh>(null);
   const rightLegRef = useRef<THREE.Mesh>(null);
   const upperBodyRef = useRef<THREE.Group>(null);
+  const hpBarRef = useRef<HTMLDivElement>(null);
 
-  // High-precision Snapshot / Dead-Reckoning Extrapolation State
-  const packetPos = useRef(new THREE.Vector3(0, 0, 0));
-  const packetVel = useRef(new THREE.Vector3(0, 0, 0));
-  const packetYaw = useRef(0);
-  const packetPitch = useRef(0);
-  const packetTime = useRef(performance.now());
-  const lastPacketTimestamp = useRef(0);
+  // Directly sample interpolated transform every frame at 144Hz
+  useFrame(() => {
+    if (!groupRef.current) return;
 
-  // Continuous visual position & rotation rendered at 144Hz
-  const visualPos = useRef(new THREE.Vector3(0, 0, 0));
-  const visualYaw = useRef(0);
-  const visualPitch = useRef(0);
-  const isInitialized = useRef(false);
-
-  // Sync state whenever player data updates
-  useEffect(() => {
-    if (!player) return;
-
-    const pPos = player.position && Array.isArray(player.position) ? player.position : [0, 1.62, 0];
-    const pRot = player.rotation && Array.isArray(player.rotation) ? player.rotation : [0, 0, 0];
-    const pVel = player.velocity && Array.isArray(player.velocity) ? player.velocity : [0, 0, 0];
-
-    const groundY = Math.max(0, pPos[1] - 1.62);
-
-    packetPos.current.set(pPos[0], groundY, pPos[2]);
-    packetVel.current.set(pVel[0], pVel[1], pVel[2]);
-    packetYaw.current = pRot[1] || 0;
-    packetPitch.current = pRot[0] || 0;
-    packetTime.current = performance.now();
-    lastPacketTimestamp.current = player.lastUpdated || Date.now();
-
-    if (!isInitialized.current) {
-      visualPos.current.set(pPos[0], groundY, pPos[2]);
-      visualYaw.current = packetYaw.current;
-      visualPitch.current = packetPitch.current;
-      isInitialized.current = true;
+    const transform = multiplayerService.getInterpolatedTransform(player.id, 45);
+    if (!transform) {
+      const pPos = player.position || [0, 1.62, 0];
+      groupRef.current.position.set(pPos[0], Math.max(0, pPos[1] - 1.62), pPos[2]);
+      return;
     }
-  }, [player]);
 
-  useFrame((_, delta) => {
-    if (!groupRef.current || !player.isAlive) return;
+    if (!transform.isAlive) {
+      groupRef.current.visible = false;
+      return;
+    }
 
-    const now = performance.now();
-    // Elapsed time since the last authoritative state packet (clamped to 0.25s to avoid runaway)
-    const elapsedSec = Math.max(0, Math.min(0.25, (now - packetTime.current) / 1000.0));
+    groupRef.current.visible = true;
+    groupRef.current.position.set(transform.x, transform.y, transform.z);
+    groupRef.current.rotation.y = transform.yaw;
 
-    // Continuous Real-Time Extrapolation: Predict exact position in real time
-    const predX = packetPos.current.x + packetVel.current.x * elapsedSec;
-    const predY = packetPos.current.y + packetVel.current.y * elapsedSec;
-    const predZ = packetPos.current.z + packetVel.current.z * elapsedSec;
-
-    // Frame-rate independent exponential smoothing filter (24x per second)
-    const dtClamped = Math.min(delta, 0.05);
-    const smoothFactor = 1.0 - Math.exp(-24.0 * dtClamped);
-
-    visualPos.current.x += (predX - visualPos.current.x) * smoothFactor;
-    visualPos.current.y += (Math.max(0, predY) - visualPos.current.y) * smoothFactor;
-    visualPos.current.z += (predZ - visualPos.current.z) * smoothFactor;
-
-    // Shortest-arc Angular Lerp for Yaw (prevents 360-degree reverse spin glitch)
-    let diffYaw = (packetYaw.current - visualYaw.current) % (Math.PI * 2);
-    if (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
-    if (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
-    visualYaw.current += diffYaw * smoothFactor;
-
-    // Pitch lerp
-    visualPitch.current += (packetPitch.current - visualPitch.current) * smoothFactor;
-
-    // Apply transform to root model
-    groupRef.current.position.copy(visualPos.current);
-    groupRef.current.rotation.y = visualYaw.current;
-
-    // Pitch upper body with look direction
     if (upperBodyRef.current) {
-      upperBodyRef.current.rotation.x = visualPitch.current;
+      upperBodyRef.current.rotation.x = transform.pitch;
     }
 
-    // Walking leg swing animation based on continuous ground velocity
-    const groundSpeed = Math.hypot(packetVel.current.x, packetVel.current.z);
-    if (groundSpeed > 0.3 && leftLegRef.current && rightLegRef.current) {
-      const legSwing = Math.sin(now * 0.012) * 0.55;
+    // Walking animation
+    const speed = Math.hypot(transform.vx, transform.vz);
+    if (speed > 0.3 && leftLegRef.current && rightLegRef.current) {
+      const legSwing = Math.sin(performance.now() * 0.012) * 0.55;
       leftLegRef.current.rotation.x = legSwing;
       rightLegRef.current.rotation.x = -legSwing;
     } else if (leftLegRef.current && rightLegRef.current) {
-      leftLegRef.current.rotation.x *= 0.82;
-      rightLegRef.current.rotation.x *= 0.82;
+      leftLegRef.current.rotation.x *= 0.8;
+      rightLegRef.current.rotation.x *= 0.8;
+    }
+
+    // Direct DOM HP Bar update (zero React re-render overhead!)
+    if (hpBarRef.current) {
+      const hpPct = Math.max(0, Math.min(1, transform.health / 100));
+      hpBarRef.current.style.width = `${hpPct * 100}%`;
+      hpBarRef.current.style.background = hpPct > 0.5 
+        ? 'linear-gradient(90deg, #059669, #10b981)' 
+        : hpPct > 0.25 
+        ? 'linear-gradient(90deg, #d97706, #f59e0b)' 
+        : 'linear-gradient(90deg, #dc2626, #ef4444)';
     }
   });
 
-  if (!player.isAlive) {
-    return null;
-  }
-
   const color = player.color || '#00f0ff';
-  const healthPercent = Math.max(0, Math.min(1, player.health / (player.maxHealth || 100)));
   const weapon = player.activeWeapon || 'vandal';
 
   return (
@@ -122,14 +77,11 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
           </div>
           <div className="w-22 h-2 bg-black/90 rounded-full mt-1 border border-white/20 overflow-hidden p-0.5">
             <div
-              className="h-full rounded-full transition-all duration-100"
+              ref={hpBarRef}
+              className="h-full rounded-full transition-all duration-75"
               style={{
-                width: `${healthPercent * 100}%`,
-                background: healthPercent > 0.5 
-                  ? 'linear-gradient(90deg, #059669, #10b981)' 
-                  : healthPercent > 0.25 
-                  ? 'linear-gradient(90deg, #d97706, #f59e0b)' 
-                  : 'linear-gradient(90deg, #dc2626, #ef4444)'
+                width: `${Math.max(0, Math.min(1, (player.health || 100) / 100)) * 100}%`,
+                background: 'linear-gradient(90deg, #059669, #10b981)'
               }}
             />
           </div>
@@ -144,7 +96,7 @@ export const RedmatchPlayerModel: React.FC<RedmatchPlayerModelProps> = ({ player
           <meshStandardMaterial color={color} roughness={0.3} metalness={0.5} />
         </mesh>
 
-        {/* Torso accent badge */}
+        {/* Torso accent stripe */}
         <mesh position={[0, 0.05, 0.172]}>
           <planeGeometry args={[0.36, 0.18]} />
           <meshStandardMaterial color="#0f172a" roughness={0.8} />
