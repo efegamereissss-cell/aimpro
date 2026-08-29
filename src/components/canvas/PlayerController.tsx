@@ -185,14 +185,25 @@ export const PlayerController: React.FC = () => {
     let isHeadshot = false;
 
     for (const item of intersects) {
-      const obj = item.object;
-      const isRemote = obj.userData?.isRemotePlayer || (obj.parent && obj.parent.userData?.isRemotePlayer);
-      const tid = obj.userData?.targetId || (obj.parent && obj.parent.userData?.targetId);
+      let curr: THREE.Object3D | null = item.object;
+      let isRemote = false;
+      let tid: string | null = null;
+      let isHs = item.object.userData?.isHeadshot || false;
+
+      while (curr) {
+        if (curr.userData?.isRemotePlayer) isRemote = true;
+        if (curr.userData?.isHeadshot) isHs = true;
+        if (curr.userData?.targetId) {
+          tid = curr.userData.targetId;
+          break;
+        }
+        curr = curr.parent;
+      }
 
       if (isRemote && tid) {
         hitRemotePlayerId = tid;
         hitPoint = [item.point.x, item.point.y, item.point.z];
-        isHeadshot = obj.userData?.isHeadshot || false;
+        isHeadshot = isHs;
         break;
       } else if (tid) {
         hitTargetId = tid;

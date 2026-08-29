@@ -281,7 +281,25 @@ class MultiplayerService {
       case 'PLAYER_DAMAGE': {
         const { attackerId, attackerName, attackerColor, targetId, damage, isHeadshot, weapon } = packet.payload;
         if (targetId === store.localId && store.isAlive) {
-          const { isDead } = store.updateLocalHealth(damage);
+          const { newHealth, isDead } = store.updateLocalHealth(damage);
+          soundEngine.playHitSound(1, false);
+
+          // Broadcast updated state immediately
+          this.sendPacket('PLAYER_STATE', {
+            id: store.localId,
+            nickname: store.nickname,
+            color: store.color,
+            hatType: store.hatType,
+            position: store.position,
+            rotation: store.rotation,
+            velocity: store.velocity,
+            activeWeapon: 'vandal',
+            health: newHealth,
+            maxHealth: store.maxHealth,
+            isAlive: newHealth > 0,
+            kills: store.kills,
+            deaths: isDead ? store.deaths + 1 : store.deaths
+          });
 
           if (isDead) {
             this.sendPacket('PLAYER_DEATH', {
@@ -304,6 +322,17 @@ class MultiplayerService {
               victimColor: store.color,
               weapon,
               isHeadshot
+            });
+          }
+        } else if (attackerId === store.localId) {
+          // Optimistically reduce target remote player HP on attacker's HUD
+          const targetPlayer = store.remotePlayers[targetId];
+          if (targetPlayer) {
+            const nextHp = Math.max(0, targetPlayer.health - damage);
+            store.updateRemotePlayer({
+              id: targetId,
+              health: nextHp,
+              isAlive: nextHp > 0
             });
           }
         }
