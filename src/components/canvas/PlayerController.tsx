@@ -138,6 +138,8 @@ export const PlayerController: React.FC = () => {
   // Handle Weapon Firing
   const handleFire = useCallback(() => {
     if (gameStatusRef.current !== 'playing') return;
+    const mpStore = useMultiplayerStore.getState();
+    if (mpStore.isMultiplayerActive && !mpStore.isAlive) return;
 
     const currentScenario = scenarioRef.current;
     const rawSlot = activeWeaponSlotRef.current;
@@ -485,12 +487,23 @@ export const PlayerController: React.FC = () => {
         const nextTime = Math.max(0, respawnTime - dt);
         useMultiplayerStore.getState().setRespawnTimer(nextTime);
         if (nextTime === 0) {
-          // Respawn at random arena spawn point
-          const rx = (Math.random() - 0.5) * 20;
-          const rz = (Math.random() - 0.5) * 20;
-          posRef.current.set(rx, 1.62, rz);
+          const spawnPads = [
+            [-25, -25],
+            [25, -25],
+            [-25, 25],
+            [25, 25],
+            [0, -30],
+            [0, 30],
+            [-30, 0],
+            [30, 0]
+          ];
+          const pad = spawnPads[Math.floor(Math.random() * spawnPads.length)];
+          posRef.current.set(pad[0], 1.62, pad[1]);
+          yawRef.current = Math.atan2(-pad[0], -pad[1]);
           velRef.current.set(0, 0, 0);
+          camera.position.copy(posRef.current);
           useMultiplayerStore.getState().respawnLocalPlayer();
+          multiplayerService.broadcastRespawn([pad[0], 1.62, pad[1]]);
         }
         return; // Freeze movement while waiting for respawn
       }

@@ -7,10 +7,11 @@ import { soundEngine } from '../../audio/SoundEngine';
 class MultiplayerService {
   private client: MqttClient | null = null;
   private broadcastChannel: BroadcastChannel | null = null;
-  private heartbeatInterval: number | null = null;
+  private cleanupInterval: number | null = null;
   private isDestroyed = false;
   private currentTopic: string = 'aimpro/dm/global';
   private currentRoom: string = 'aimpro-global-dm';
+  private lastStateBroadcast = 0;
 
   public init() {
     if (typeof window === 'undefined') return;
@@ -37,24 +38,23 @@ class MultiplayerService {
     const clientId = `aimpro_${store.localId}_${Math.random().toString(16).substring(2, 8)}`;
 
     try {
-      // Connect to high-speed public MQTT broker over secure WebSockets
+      // Connect to global high-speed MQTT broker
       this.client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
         clientId,
         clean: true,
         connectTimeout: 5000,
-        reconnectPeriod: 2000,
+        reconnectPeriod: 1500,
         keepalive: 30
       });
 
       this.client.on('connect', () => {
-        console.log('[Multiplayer] Connected to global MQTT broker on topic:', this.currentTopic);
+        console.log('[Multiplayer] Connected to global broker on topic:', this.currentTopic);
         store.setConnected(true, this.currentRoom);
 
         if (this.client) {
-          this.client.subscribe(this.currentTopic, (err) => {
+          this.client.subscribe(this.currentTopic, { qos: 0 }, (err) => {
             if (!err) {
               console.log('[Multiplayer] Subscribed successfully to:', this.currentTopic);
-              // Broadcast join packet
               this.broadcastLocalJoin();
             }
           });
@@ -69,20 +69,16 @@ class MultiplayerService {
       });
 
       this.client.on('error', (err) => {
-        console.warn('[Multiplayer] MQTT connection error, falling back:', err);
+        console.warn('[Multiplayer] MQTT connection error:', err);
         store.setConnected(true, this.currentRoom);
-      });
-
-      this.client.on('offline', () => {
-        console.log('[Multiplayer] MQTT client offline.');
       });
     } catch (err) {
       console.warn('[Multiplayer] Failed to init MQTT:', err);
       store.setConnected(true, this.currentRoom);
     }
 
-    // Start 120ms heartbeat state sync and stale player cleanup
-    this.startHeartbeat();
+    // Start cleanup interval for stale peers (runs every 3 seconds)
+    this.startStaleCleanup();
   }
 
   public broadcastLocalJoin() {
@@ -113,14 +109,14 @@ class MultiplayerService {
 
     const serialized = JSON.stringify(packet);
 
-    // 1. Local BroadcastChannel
+    // 1. Same-device / same-browser instantaneous sync
     if (this.broadcastChannel) {
       try {
         this.broadcastChannel.postMessage(packet);
       } catch (e) {}
     }
 
-    // 2. Global MQTT PubSub (Cross-browser, cross-device)
+    // 2. Global network pub/sub
     if (this.client && this.client.connected) {
       try {
         this.client.publish(this.currentTopic, serialized, { qos: 0 });
@@ -128,6 +124,10 @@ class MultiplayerService {
     }
   }
 
+  /**
+   * High-Performance Throttled Position Broadcast (25Hz / 40ms)
+   * Eliminates MQTT network congestion and packet queuing lag!
+   */
   public broadcastLocalState(
     position: [number, number, number],
     rotation: [number, number, number],
@@ -139,6 +139,11 @@ class MultiplayerService {
     if (!store.isMultiplayerActive) return;
 
     store.setLocalTransform(position, rotation, velocity);
+
+    const now = Date.now();
+    // Throttle to 25Hz (40ms) to ensure zero network queue lag
+    if (now - this.lastStateBroadcast < 40) return;
+    this.lastStateBroadcast = now;
 
     this.sendPacket('PLAYER_STATE', {
       id: store.localId,
@@ -189,6 +194,19 @@ class MultiplayerService {
     });
   }
 
+  public broadcastRespawn(newPosition: [number, number, number]) {
+    const store = useMultiplayerStore.getState();
+    this.sendPacket('PLAYER_RESPAWN', {
+      id: store.localId,
+      nickname: store.nickname,
+      color: store.color,
+      hatType: store.hatType,
+      position: newPosition,
+      health: 100,
+      isAlive: true
+    });
+  }
+
   private handleIncomingPacket(packet: NetworkPacket) {
     const store = useMultiplayerStore.getState();
     if (!packet || !packet.senderId || packet.senderId === store.localId) return;
@@ -196,7 +214,6 @@ class MultiplayerService {
     switch (packet.type) {
       case 'PLAYER_JOIN': {
         const p = packet.payload;
-        // 1. Add / update remote player in store
         store.updateRemotePlayer({
           id: p.id,
           nickname: p.nickname || 'Player',
@@ -214,7 +231,7 @@ class MultiplayerService {
           ping: 15
         });
 
-        // 2. Acknowledge with local player state so the newcomer sees us
+        // Send local player state back so newcomer discovers us
         this.sendPacket('PLAYER_STATE', {
           id: store.localId,
           nickname: store.nickname,
@@ -265,43 +282,28 @@ class MultiplayerService {
           soundEngine.playGunshot('rifle');
         }
 
-        // Add remote player bullet tracer
         if (origin && direction && weapon !== 'knife') {
           const from = origin as [number, number, number];
           const to = [
-            from[0] + direction[0] * 50,
-            from[1] + direction[1] * 50,
-            from[2] + direction[2] * 50
+            from[0] + direction[0] * 60,
+            from[1] + direction[1] * 60,
+            from[2] + direction[2] * 60
           ] as [number, number, number];
-          useGameStore.getState().addBulletTracer(from, to, '#f59e0b');
+          useGameStore.getState().addBulletTracer(from, to, '#00f0ff');
         }
         break;
       }
 
       case 'PLAYER_DAMAGE': {
         const { attackerId, attackerName, attackerColor, targetId, damage, isHeadshot, weapon } = packet.payload;
+        
+        // Check if WE are the target who took damage
         if (targetId === store.localId && store.isAlive) {
           const { newHealth, isDead } = store.updateLocalHealth(damage);
-          soundEngine.playHitSound(1, false);
-
-          // Broadcast updated state immediately
-          this.sendPacket('PLAYER_STATE', {
-            id: store.localId,
-            nickname: store.nickname,
-            color: store.color,
-            hatType: store.hatType,
-            position: store.position,
-            rotation: store.rotation,
-            velocity: store.velocity,
-            activeWeapon: 'vandal',
-            health: newHealth,
-            maxHealth: store.maxHealth,
-            isAlive: newHealth > 0,
-            kills: store.kills,
-            deaths: isDead ? store.deaths + 1 : store.deaths
-          });
+          soundEngine.playHitSound(1, isHeadshot);
 
           if (isDead) {
+            // Broadcast authoritative death event to everyone
             this.sendPacket('PLAYER_DEATH', {
               killerId: attackerId,
               killerName: attackerName,
@@ -323,16 +325,22 @@ class MultiplayerService {
               weapon,
               isHeadshot
             });
-          }
-        } else if (attackerId === store.localId) {
-          // Optimistically reduce target remote player HP on attacker's HUD
-          const targetPlayer = store.remotePlayers[targetId];
-          if (targetPlayer) {
-            const nextHp = Math.max(0, targetPlayer.health - damage);
-            store.updateRemotePlayer({
-              id: targetId,
-              health: nextHp,
-              isAlive: nextHp > 0
+          } else {
+            // Broadcast new health state
+            this.sendPacket('PLAYER_STATE', {
+              id: store.localId,
+              nickname: store.nickname,
+              color: store.color,
+              hatType: store.hatType,
+              position: store.position,
+              rotation: store.rotation,
+              velocity: store.velocity,
+              activeWeapon: 'vandal',
+              health: newHealth,
+              maxHealth: 100,
+              isAlive: true,
+              kills: store.kills,
+              deaths: store.deaths
             });
           }
         }
@@ -342,11 +350,20 @@ class MultiplayerService {
       case 'PLAYER_DEATH': {
         const { killerId, killerName, killerColor, victimId, victimName, victimColor, weapon, isHeadshot } = packet.payload;
 
+        // Mark victim as dead in remote players
+        store.updateRemotePlayer({
+          id: victimId,
+          health: 0,
+          isAlive: false
+        });
+
+        // If WE were the killer: award kill & play victory kill banner sound!
         if (killerId === store.localId) {
           store.incrementLocalKill();
           soundEngine.playKillBannerSound(store.streak);
         }
 
+        // Add to killfeed for all players
         store.addKillfeedEntry({
           killerId,
           killerName,
@@ -360,6 +377,17 @@ class MultiplayerService {
         break;
       }
 
+      case 'PLAYER_RESPAWN': {
+        const { id, position } = packet.payload;
+        store.updateRemotePlayer({
+          id,
+          position: (position && Array.isArray(position) && position.length >= 3 ? [position[0], position[1], position[2]] : [0, 1.62, 0]) as [number, number, number],
+          health: 100,
+          isAlive: true
+        });
+        break;
+      }
+
       case 'PLAYER_LEAVE': {
         store.removeRemotePlayer(packet.payload.id);
         break;
@@ -367,46 +395,29 @@ class MultiplayerService {
     }
   }
 
-  private startHeartbeat() {
-    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+  private startStaleCleanup() {
+    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
 
-    // Continuous 120ms heartbeat
-    this.heartbeatInterval = window.setInterval(() => {
+    // Runs every 3 seconds to cleanly remove peers who closed their tab/browser
+    this.cleanupInterval = window.setInterval(() => {
       if (this.isDestroyed) return;
       const store = useMultiplayerStore.getState();
       if (!store.isMultiplayerActive) return;
 
-      this.sendPacket('PLAYER_STATE', {
-        id: store.localId,
-        nickname: store.nickname,
-        color: store.color,
-        hatType: store.hatType,
-        position: store.position,
-        rotation: store.rotation,
-        velocity: store.velocity,
-        activeWeapon: 'vandal',
-        health: store.health,
-        maxHealth: store.maxHealth,
-        isAlive: store.isAlive,
-        kills: store.kills,
-        deaths: store.deaths
-      });
-
-      // Stale player cleanup (after 10s of inactivity)
       const now = Date.now();
       Object.values(store.remotePlayers).forEach((player) => {
         if (now - player.lastUpdated > 10000) {
           store.removeRemotePlayer(player.id);
         }
       });
-    }, 120);
+    }, 3000);
   }
 
   public disconnect() {
     this.isDestroyed = true;
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
     }
 
     const store = useMultiplayerStore.getState();
