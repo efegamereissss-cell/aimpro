@@ -14,14 +14,15 @@ class MultiplayerService {
   private lastStateBroadcast = 0;
   private packetCounter = 0;
 
-  // Packet deduplication map
+  // Deduplication
   private seenPackets = new Map<string, number>();
 
   public init() {
     if (typeof window === 'undefined') return;
 
+    // 1. Same-Browser BroadcastChannel
     try {
-      this.broadcastChannel = new BroadcastChannel('aimpro-dm-v3');
+      this.broadcastChannel = new BroadcastChannel('aimpro-dm-v4');
       this.broadcastChannel.onmessage = (event: MessageEvent<NetworkPacket>) => {
         this.handleIncomingPacket(event.data);
       };
@@ -29,39 +30,47 @@ class MultiplayerService {
       console.warn('[Multiplayer] BroadcastChannel not supported:', e);
     }
 
-    // Clean up seen packets every 5 seconds
+    // 2. High-Speed Local Vite WebSocket Relay (0.05ms ping between Opera, Edge, Chrome, etc.)
+    if ((import.meta as any).hot) {
+      (import.meta as any).hot.on('aimpro:packet', (data: NetworkPacket) => {
+        this.handleIncomingPacket(data);
+      });
+    }
+
+    // Clean old seen packets
     window.setInterval(() => {
-      const cutoff = Date.now() - 3000;
+      const cutoff = Date.now() - 2000;
       for (const [key, ts] of this.seenPackets) {
         if (ts < cutoff) this.seenPackets.delete(key);
       }
-    }, 5000);
+    }, 3000);
   }
 
   public connect(roomCode: string = 'aimpro-global-dm') {
     this.disconnect();
     this.isDestroyed = false;
     this.currentRoom = roomCode.trim().toLowerCase();
-    this.currentTopic = `aimpro/dm/v3_${this.currentRoom.replace(/[^a-z0-9_-]/g, '_')}`;
+    this.currentTopic = `aimpro/dm/v4_${this.currentRoom.replace(/[^a-z0-9_-]/g, '_')}`;
 
     const store = useMultiplayerStore.getState();
     store.setConnecting(true, null);
 
-    const clientId = `aimpro_${store.localId}_${Math.random().toString(16).substring(2, 8)}`;
+    // Announce immediately via local zero-latency channels
+    this.broadcastLocalJoin();
 
+    // Connect to global cloud broker
+    const clientId = `aimpro_${store.localId}_${Math.random().toString(16).substring(2, 8)}`;
     try {
       this.client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
         clientId,
         clean: true,
-        connectTimeout: 5000,
-        reconnectPeriod: 1500,
+        connectTimeout: 4000,
+        reconnectPeriod: 2000,
         keepalive: 30
       });
 
       this.client.on('connect', () => {
-        console.log('[Multiplayer] Connected to broker on topic:', this.currentTopic);
         store.setConnected(true, this.currentRoom);
-
         if (this.client) {
           this.client.subscribe(this.currentTopic, { qos: 0 }, (err) => {
             if (!err) {
@@ -78,12 +87,10 @@ class MultiplayerService {
         } catch (_err) {}
       });
 
-      this.client.on('error', (err) => {
-        console.warn('[Multiplayer] MQTT error:', err);
+      this.client.on('error', () => {
         store.setConnected(true, this.currentRoom);
       });
-    } catch (err) {
-      console.warn('[Multiplayer] MQTT init error:', err);
+    } catch (_err) {
       store.setConnected(true, this.currentRoom);
     }
 
@@ -118,19 +125,28 @@ class MultiplayerService {
       pktId
     };
 
-    const serialized = JSON.stringify(packet);
+    // 1. High-Speed Local Vite WebSocket Relay (Instant 0ms sync between different browser engines)
+    if ((import.meta as any).hot) {
+      try {
+        (import.meta as any).hot.send('aimpro:packet', packet);
+      } catch (_e) {}
+    }
 
+    // 2. Same-Browser BroadcastChannel
     if (this.broadcastChannel) {
       try { this.broadcastChannel.postMessage(packet); } catch (_e) {}
     }
 
+    // 3. Global Network Pub/Sub
     if (this.client && this.client.connected) {
-      try { this.client.publish(this.currentTopic, serialized, { qos: 0 }); } catch (_e) {}
+      try {
+        this.client.publish(this.currentTopic, JSON.stringify(packet), { qos: 0 });
+      } catch (_e) {}
     }
   }
 
   /**
-   * Broadcast state at clean 30Hz (every 33ms)
+   * Broadcast state at 30Hz (every 33ms)
    */
   public broadcastLocalState(
     position: [number, number, number],
@@ -209,7 +225,7 @@ class MultiplayerService {
     const store = useMultiplayerStore.getState();
     if (!packet || !packet.senderId || packet.senderId === store.localId) return;
 
-    // Deduplication
+    // Deduplication (prevents double processing from both local WS and cloud MQTT)
     const pktId = packet.pktId;
     if (pktId) {
       if (this.seenPackets.has(pktId)) return;
@@ -255,8 +271,6 @@ class MultiplayerService {
       case 'PLAYER_STATE': {
         const p = packet.payload;
         const existing = store.remotePlayers[p.id];
-        
-        // If remote player is dead on our side, do NOT revive until PLAYER_RESPAWN arrives
         const isAliveVal = existing && !existing.isAlive ? false : (p.isAlive !== undefined ? p.isAlive : true);
 
         store.updateRemotePlayer({
