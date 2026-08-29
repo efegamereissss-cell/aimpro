@@ -76,7 +76,8 @@ export const PlayerController: React.FC = () => {
     backward: false,
     left: false,
     right: false,
-    jump: false
+    jump: false,
+    sprint: false
   });
   const isMouseDownRef = useRef(false);
   const isADSDownRef = useRef(false);
@@ -408,6 +409,7 @@ export const PlayerController: React.FC = () => {
       if (e.code === 'KeyA') keysRef.current.left = true;
       if (e.code === 'KeyD') keysRef.current.right = true;
       if (e.code === 'Space') keysRef.current.jump = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keysRef.current.sprint = true;
 
       // Weapon Switching
       if (e.code === 'Digit1' || e.code === 'Numpad1' || e.key === '1') {
@@ -443,6 +445,7 @@ export const PlayerController: React.FC = () => {
       if (e.code === 'KeyA') keysRef.current.left = false;
       if (e.code === 'KeyD') keysRef.current.right = false;
       if (e.code === 'Space') keysRef.current.jump = false;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') keysRef.current.sprint = false;
       if (e.code === 'Tab') {
         e.preventDefault();
         useMultiplayerStore.getState().setScoreboardOpen(false);
@@ -561,7 +564,8 @@ export const PlayerController: React.FC = () => {
     const GRAVITY = 18.0;
     const JUMP_IMPULSE = isBhopScenario ? 6.2 : 5.4;
     const GROUND_FRICTION = isBhopScenario ? 5.0 : 9.0;
-    const MAX_GROUND_SPEED = isBhopScenario ? 7.0 : 5.8;
+    const isSprinting = keysRef.current.sprint && hasInput;
+    const MAX_GROUND_SPEED = isBhopScenario ? 7.0 : (isSprinting ? 9.5 : 5.8);
 
     if (isGroundedRef.current) {
       if (keysRef.current.jump) {
