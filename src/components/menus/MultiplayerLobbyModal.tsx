@@ -61,11 +61,14 @@ export const MultiplayerLobbyModal: React.FC<MultiplayerLobbyModalProps> = ({ is
     multiplayerService.connect(finalRoom);
 
     // Launch Arena scenario
-    const dmScenario = ALL_SCENARIOS.find(s => s.id === 'tactical_bot_duel_peeking') || ALL_SCENARIOS[0];
+    const baseScenario = ALL_SCENARIOS[0];
     setScenario({
-      ...dmScenario,
+      ...baseScenario,
+      id: 'online_deathmatch_arena',
       name: `Online Deathmatch [${finalRoom}]`,
-      targetCount: 0 // No bots in multiplayer DM!
+      duration: 600, // 10 minutes match
+      targetCount: 0, // No bots in multiplayer DM!
+      tags: ['Online Deathmatch', 'Multiplayer', 'Redmatch 2']
     });
     startGame();
     onClose();

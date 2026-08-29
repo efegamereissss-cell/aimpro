@@ -98,19 +98,37 @@ export const PlayerController: React.FC = () => {
 
   // Reset Player on scenario change
   useEffect(() => {
-    const isHaven = scenario.id === 'tactical_bot_duel_peeking' || (scenario.tags && scenario.tags.includes('Bot Peeking'));
+    const isMp = useMultiplayerStore.getState().isMultiplayerActive;
+    const isHaven = !isMp && (scenario.id === 'tactical_bot_duel_peeking' || (scenario.tags && scenario.tags.includes('Bot Peeking')));
     const isBhop = scenario.id.includes('bhop');
 
-    if (isHaven) {
+    if (isMp) {
+      // Spawn on one of the flat open arena platforms facing center
+      const spawnPads = [
+        [-25, -25],
+        [25, -25],
+        [-25, 25],
+        [25, 25],
+        [0, -30],
+        [0, 30],
+        [-30, 0],
+        [30, 0]
+      ];
+      const pad = spawnPads[Math.floor(Math.random() * spawnPads.length)];
+      posRef.current.set(pad[0], 1.62, pad[1]);
+      yawRef.current = Math.atan2(-pad[0], -pad[1]);
+    } else if (isHaven) {
       posRef.current.set(-5.5, 1.62, 10.5);
+      yawRef.current = 0;
     } else if (isBhop) {
       posRef.current.set(0, 1.62, 2.0);
+      yawRef.current = 0;
     } else {
       posRef.current.set(0, 1.62, 0);
+      yawRef.current = 0;
     }
     velRef.current.set(0, 0, 0);
     pitchRef.current = 0;
-    yawRef.current = 0;
     isGroundedRef.current = true;
     camera.position.copy(posRef.current);
     camera.quaternion.set(0, 0, 0, 1);

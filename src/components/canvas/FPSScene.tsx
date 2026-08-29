@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { Arena } from './Arena';
 import { BhopParkourMap } from './BhopParkourMap';
 import { HavenCSiteMap } from './HavenCSiteMap';
+import { FlatOpenDeathmatchMap } from './FlatOpenDeathmatchMap';
+import { GameLoopManager } from './GameLoopManager';
 import { PlayerController } from './PlayerController';
 import { TargetManager } from './TargetManager';
 import { ParticleSystem } from './ParticleSystem';
@@ -56,7 +58,7 @@ export const FPSScene: React.FC = () => {
         camera={{
           fov: 70.5328, // Exact Valorant 103° Horizontal FOV at 16:9
           near: 0.05,
-          far: 140,
+          far: 200,
           position: [0, 2.7, 0]
         }}
         dpr={[1, 2]}
@@ -66,47 +68,43 @@ export const FPSScene: React.FC = () => {
           alpha: false,
           powerPreference: 'high-performance',
           toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.05
+          toneMappingExposure: isMultiplayerActive ? 1.15 : 1.05
         }}
       >
         <DynamicValorantCameraManager />
 
-        {/* Balanced Ambient Radiance */}
-        <ambientLight intensity={0.45} color="#e2e8f0" />
+        {/* Balanced Ambient Radiance - Bright daylight for open deathmatch */}
+        <ambientLight intensity={isMultiplayerActive ? 0.85 : 0.45} color={isMultiplayerActive ? '#f0f9ff' : '#e2e8f0'} />
 
-        {/* Primary Sun Directional Key Light with High-Performance Shadows */}
+        {/* Primary Sun Directional Key Light */}
         <directionalLight
-          position={[16, 26, 14]}
-          intensity={1.35}
+          position={[24, 40, 20]}
+          intensity={isMultiplayerActive ? 1.6 : 1.35}
           color="#ffffff"
           castShadow={videoSettings.shadows}
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
           shadow-camera-near={0.5}
-          shadow-camera-far={65}
-          shadow-camera-left={-22}
-          shadow-camera-right={22}
-          shadow-camera-top={22}
-          shadow-camera-bottom={-22}
+          shadow-camera-far={90}
+          shadow-camera-left={-40}
+          shadow-camera-right={40}
+          shadow-camera-top={40}
+          shadow-camera-bottom={-40}
           shadow-bias={-0.0001}
         />
 
-        {/* Secondary Cyber Cyan Rim Light */}
+        {/* Secondary Sky Fill Light */}
         <directionalLight
-          position={[-18, 16, -10]}
-          intensity={0.45}
-          color="#00f0ff"
-        />
-
-        {/* Deep Ground Fill Light */}
-        <directionalLight
-          position={[0, -10, 0]}
-          intensity={0.15}
-          color="#0f172a"
+          position={[-20, 25, -15]}
+          intensity={isMultiplayerActive ? 0.65 : 0.45}
+          color={isMultiplayerActive ? '#7dd3fc' : '#00f0ff'}
         />
 
         <Suspense fallback={null}>
-          {isBhopMap ? (
+          <GameLoopManager />
+          {isMultiplayerActive ? (
+            <FlatOpenDeathmatchMap />
+          ) : isBhopMap ? (
             <BhopParkourMap />
           ) : isHavenMap ? (
             <HavenCSiteMap />
