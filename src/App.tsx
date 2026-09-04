@@ -5,7 +5,7 @@ import { ClipsView } from './components/clips/ClipsView';
 import { GuessTheRank } from './components/rankGame/GuessTheRank';
 import { ProCrosshairs } from './components/crosshair/ProCrosshairs';
 import { VctMatches } from './components/vct/VctMatches';
-import { Flame, Shield, Users, Trophy, ExternalLink, Heart } from 'lucide-react';
+import { Users, Flame, ExternalLink, Heart } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('lobbies');
@@ -30,16 +30,16 @@ export function App() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-white/10 bg-[#0A0D14]/90 backdrop-blur-md py-8">
+      <footer className="mt-auto border-t border-white/10 bg-[#0A0D14]/95 backdrop-blur-md py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-white/50">
           
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#FF4655] flex items-center justify-center text-white font-black">
-              <Flame className="w-4 h-4 fill-white" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#FF4655] to-rose-600 flex items-center justify-center text-white font-black shadow-md">
+              <Users className="w-4 h-4" />
             </div>
             <div>
-              <span className="font-black text-sm text-white tracking-tight">PREMATE.PRO</span>
-              <p className="text-[11px] text-white/40">Türkiye'nin En Gelişmiş Valorant Espor & Takım Arama Portalı</p>
+              <span className="font-black text-sm text-white tracking-tight">Team<span className="text-[#FF4655]">Com</span></span>
+              <p className="text-[11px] text-white/40">Türkiye'nin En Gelişmiş Valorant Takım Arama & Lobi Portalı</p>
             </div>
           </div>
 
@@ -63,7 +63,7 @@ export function App() {
 
           <div className="text-center md:text-right">
             <p className="text-[10px] text-white/40">
-              Valorant, Riot Games Inc.'in tescilli markasıdır. Bu site bağımsız bir topluluk projesidir.
+              Valorant, Riot Games Inc.'in tescilli markasıdır. TeamCom bağımsız bir topluluk platformudur.
             </p>
           </div>
 

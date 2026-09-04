@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Lobby, LobbyFilterState, ValorantRank, AgentRole, GameMode, ServerRegion, MicRequirement } from '../types/esports';
+import { Lobby, LobbyFilterState } from '../types/esports';
 import { INITIAL_LOBBIES } from '../data/mockLobbies';
 import { esportsSound } from '../utils/soundEffects';
 
@@ -30,26 +30,26 @@ const DEFAULT_FILTERS: LobbyFilterState = {
   mic: 'all'
 };
 
-const STORAGE_KEY = 'valopro_lobbies_v1';
+const STORAGE_KEY = 'teamcom_lobbies_v2';
 
-// Load stored lobbies or default
+// Load stored lobbies or empty default
 const loadLobbies = (): Lobby[] => {
   if (typeof window === 'undefined') return INITIAL_LOBBIES;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
   return INITIAL_LOBBIES;
 };
 
-// Cross-tab broadcast channel
+// Cross-tab broadcast channel for TeamCom
 let broadcastChannel: BroadcastChannel | null = null;
 if (typeof window !== 'undefined') {
   try {
-    broadcastChannel = new BroadcastChannel('valopro_lobby_sync');
+    broadcastChannel = new BroadcastChannel('teamcom_lobby_sync');
   } catch {}
 }
 
@@ -116,7 +116,6 @@ export const useLobbyStore = create<LobbyStore>((set, get) => {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(partyCode);
         } else {
-          // Fallback
           const textarea = document.createElement('textarea');
           textarea.value = partyCode;
           document.body.appendChild(textarea);
@@ -128,7 +127,7 @@ export const useLobbyStore = create<LobbyStore>((set, get) => {
         esportsSound.playCodeCopied();
         set({
           copiedLobbyId: lobbyId,
-          toastMessage: `Grup Kodu Kopyalandı: ${partyCode} (Oyunda Ctrl+V yapın!)`
+          toastMessage: `Grup Kodu Kopyalandı: ${partyCode} (Valorant'ta Ctrl+V yapın!)`
         });
 
         setTimeout(() => {

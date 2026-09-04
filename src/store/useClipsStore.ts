@@ -16,7 +16,7 @@ interface ClipsStore {
   setActivePlayingClipId: (id: string | null) => void;
 }
 
-const STORAGE_KEY = 'valopro_clips_v1';
+const STORAGE_KEY = 'teamcom_clips_v2';
 
 const loadClips = (): VideoClip[] => {
   if (typeof window === 'undefined') return INITIAL_CLIPS;
@@ -24,7 +24,7 @@ const loadClips = (): VideoClip[] => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
   return INITIAL_CLIPS;

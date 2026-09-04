@@ -3,9 +3,14 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    overflow-x: hidden;
+    overflow-y: scroll;
+    height: 100%;
+  }
+
   body {
-    user-select: none;
-    -webkit-user-select: none;
+    min-height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
     background-color: #07090E;
@@ -16,8 +21,8 @@
 
 /* Custom Scrollbar for sleek dark esports look */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
