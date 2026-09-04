@@ -262,7 +262,7 @@ export const useCargoStore = create<CargoStore>((set, get) => ({
       const carrierInfo = CARRIERS[carrierId] || detectCarrierByCode(clean);
       const officialUrl = `${carrierInfo.officialTrackingUrl}${clean}`;
 
-      let shipmentResult: Shipment;
+      let shipmentResult: Shipment = createLiveOfficialShipment(clean, carrierInfo, officialUrl);
 
       // If user queried one of our sample codes, load rich mock demo
       const isPresetSample = !!SAMPLE_SHIPMENTS[clean];
@@ -273,22 +273,110 @@ export const useCargoStore = create<CargoStore>((set, get) => ({
           officialLiveUrl: officialUrl,
           isRealLiveQuery: false
         };
-      } else if (carrierId === 'trendyol_express') {
-        // Attempt live API query for Trendyol Express
+      } else {
+        let liveLoaded = false;
+
+        // Try calling our live serverless API endpoint (/api/track?code=...&carrier=...)
         try {
-          const res = await fetch(`https://apigw.trendyol.com/delivery-cargo-tracking-bff/api/tracks?trackingNumber=${clean}`);
-          if (res.ok) {
-            const liveData = await res.json();
-            shipmentResult = mapTrendyolLiveData(liveData, clean, carrierInfo, officialUrl);
-          } else {
-            shipmentResult = createLiveOfficialShipment(clean, carrierInfo, officialUrl);
+          const apiRes = await fetch(`/api/track?code=${encodeURIComponent(clean)}&carrier=${encodeURIComponent(carrierId)}`);
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (apiJson.success && apiJson.data) {
+              if (apiJson.source === 'yurtici_official_selfservis') {
+                const yk = apiJson.data;
+                const isDelivered = yk.gonderiDurumu?.toLowerCase().includes('teslim edildi');
+                const isOutForDelivery = yk.gonderiDurumu?.toLowerCase().includes('dağıtım');
+
+                shipmentResult = {
+                  trackingNumber: clean,
+                  carrier: carrierInfo,
+                  status: (isDelivered ? 'teslim_edildi' : isOutForDelivery ? 'kurye_dagitimda' : 'yolda') as ShipmentStatus,
+                  statusTitle: yk.gonderiDurumu || 'Taşıma Durumunda',
+                  statusDescription: `Yurtiçi Kargo resmi veritabanı kayıtlarına göre gönderiniz ${yk.gonderiDurumu} aşamasındadır. Teslim Birimi: ${yk.teslimBirimi}.`,
+                  currentStep: isDelivered ? 5 : isOutForDelivery ? 4 : 3,
+                  totalSteps: 5,
+                  isRealLiveQuery: true,
+                  isLiveApiData: true,
+                  officialLiveUrl: officialUrl,
+                  sender: {
+                    nameMasked: yk.gondericiAdi || 'Kayıtlı Gönderici',
+                    city: 'Çıkış Şubesi',
+                    branch: 'Yurtiçi Kargo Kabul Şubesi'
+                  },
+                  receiver: {
+                    nameMasked: yk.aliciAdi || 'Alıcı',
+                    city: yk.teslimBirimi || 'Varış Şubesi',
+                    district: '',
+                    addressMasked: yk.aliciAdresi || 'Kayıtlı Adres',
+                    destinationBranch: yk.teslimBirimi || 'Yurtiçi Kargo Şubesi'
+                  },
+                  packageInfo: {
+                    desi: parseFloat(yk.desiKg) || 1.0,
+                    weightKg: parseFloat(yk.desiKg) || 1.0,
+                    pieces: parseInt(yk.kargoAdedi) || 1,
+                    packageType: yk.kargoTipi || 'Paket / Koli',
+                    paymentType: yk.odemeTipi || 'Standart'
+                  },
+                  estimatedDelivery: {
+                    date: yk.tahminiTeslim || 'İşlemde',
+                    timeWindow: 'Mesai Saatleri',
+                    daysLeft: 1
+                  },
+                  events: [
+                    {
+                      id: 'yk-live-1',
+                      date: yk.gonderiTarihi || 'Bugün',
+                      time: 'Canlı',
+                      location: yk.teslimBirimi || 'Yurtiçi Kargo',
+                      facility: 'Dağıtım Birimi',
+                      status: (isDelivered ? 'teslim_edildi' : isOutForDelivery ? 'kurye_dagitimda' : 'yolda') as ShipmentStatus,
+                      title: yk.gonderiDurumu || 'Taşıma Durumunda',
+                      description: `Yurtiçi Kargo sisteminden alınan anlık canlı bilgi: ${yk.gonderiDurumu}. Teslim Şubesi: ${yk.teslimBirimi}.`,
+                      isCompleted: true,
+                      isCurrent: true
+                    },
+                    {
+                      id: 'yk-live-2',
+                      date: yk.sevkTarihi || yk.gonderiTarihi || 'Kayıt Tarihi',
+                      time: '',
+                      location: 'Kabul Şubesi',
+                      facility: 'Operasyon',
+                      status: 'kabul_edildi',
+                      title: 'Kargo Kabul Edildi / Sevk Edildi',
+                      description: `Gönderici: ${yk.gondericiAdi}. Alıcı: ${yk.aliciAdi}. Belge No: ${clean}.`,
+                      isCompleted: true,
+                      isCurrent: false
+                    }
+                  ],
+                  route: {
+                    origin: { city: 'Çıkış', label: 'Kabul Şubesi', xPercent: 20, yPercent: 44, completed: true },
+                    transferHubs: [{ city: 'Aktarma', label: 'Lojistik Hub', xPercent: 50, yPercent: 42, completed: true }],
+                    destination: { city: yk.teslimBirimi || 'Varış', label: yk.teslimBirimi || 'Teslimat Şubesi', xPercent: 82, yPercent: 46, completed: isDelivered },
+                    progressPercent: isDelivered ? 100 : 70
+                  },
+                  lastUpdated: Date.now()
+                };
+                liveLoaded = true;
+              } else if (apiJson.source === 'trendyol_live_api') {
+                shipmentResult = mapTrendyolLiveData(apiJson.data, clean, carrierInfo, officialUrl);
+                liveLoaded = true;
+              }
+            } else if (apiJson.success === false && apiJson.message) {
+              set({
+                isLoading: false,
+                errorMessage: apiJson.message
+              });
+              esportsSound.playGuessWrong();
+              return;
+            }
           }
-        } catch {
+        } catch (apiErr) {
+          console.warn('API call error:', apiErr);
+        }
+
+        if (!liveLoaded) {
           shipmentResult = createLiveOfficialShipment(clean, carrierInfo, officialUrl);
         }
-      } else {
-        // For real tracking numbers across all carriers (Yurtiçi, Aras, MNG, PTT, HepsiJET, Sürat, Kolay Gelsin, etc.)
-        shipmentResult = createLiveOfficialShipment(clean, carrierInfo, officialUrl);
       }
 
       // Add to search history
