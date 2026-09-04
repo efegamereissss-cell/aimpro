@@ -34,6 +34,28 @@ export function App() {
 
   useEffect(() => {
     init();
+
+    // Log visitor activity to Discord (once per session, privacy safe)
+    try {
+      if (typeof window !== 'undefined' && !sessionStorage.getItem('kargocom_visit_logged')) {
+        sessionStorage.setItem('kargocom_visit_logged', '1');
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const browser = navigator.userAgent.includes('Chrome') ? 'Google Chrome' :
+                        navigator.userAgent.includes('Firefox') ? 'Mozilla Firefox' :
+                        navigator.userAgent.includes('Safari') ? 'Apple Safari' :
+                        navigator.userAgent.includes('Edge') ? 'Microsoft Edge' : 'Web Tarayıcı';
+
+        fetch('/api/visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            device: isMobile ? '📱 Mobil Cihaz' : '💻 Masaüstü Bilgisayar',
+            browser,
+            path: 'Ana Sayfa'
+          })
+        }).catch(() => {});
+      }
+    } catch {}
   }, [init]);
 
   const handleTabChange = (tab: CargoNavTab) => {
