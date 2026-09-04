@@ -6,9 +6,11 @@
   body {
     user-select: none;
     -webkit-user-select: none;
-    overflow: hidden;
-    background-color: #0a0d14;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: #07090E;
     color: #e2e8f0;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
 }
 
@@ -19,33 +21,33 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f1422;
+  background: #0B0E14;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2942;
-  border-radius: 3px;
+  background: #1F293D;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00f0ff;
+  background: #FF4655;
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(255, 70, 85, 0.4);
 }
 
 .glow-cyan {
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
 }
 
-.glow-magenta {
-  box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
-}
-
-.glow-text-cyan {
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+.glow-text-red {
+  text-shadow: 0 0 12px rgba(255, 70, 85, 0.6);
 }
 
 .glass-panel {
-  background: rgba(15, 20, 34, 0.75);
+  background: rgba(15, 20, 32, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(31, 41, 66, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
