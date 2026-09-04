@@ -343,8 +343,50 @@ export const ShipmentDetailsView: React.FC<ShipmentDetailsViewProps> = ({ shipme
         </div>
       )}
 
-      {/* Interactive Shipment Route Map */}
-      <ShipmentRouteMap shipment={shipment} />
+      {/* Interactive Shipment Route Map - Only shown for Demo Shipments */}
+      {!shipment.isRealLiveQuery ? (
+        <ShipmentRouteMap shipment={shipment} />
+      ) : (
+        /* Real Official Gateway Card */
+        <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-r from-[#0F172A] via-[#131E38] to-[#0F172A] border-2 border-amber-500/40 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-wider">
+                <ShieldCheck className="w-4 h-4" />
+                <span>RESMİ VERİTABANI BAĞLANTISI AKTİF</span>
+              </div>
+
+              <h3 className="text-xl md:text-2xl font-black text-white">
+                {shipment.carrier.name} Gerçek Kargo Hareketleri
+              </h3>
+
+              <p className="text-sm text-white/70 max-w-2xl leading-relaxed">
+                Kargonuzun <strong>gerçek çıkış şubesi, şu an hangi aktarma merkezinde veya şubede olduğu ve teslimat saati</strong> doğrudan {shipment.carrier.name}'nun kendi resmi sisteminde saklanmaktadır. Sahte/tahmini rota çizilmez; tek tıkla resmi sayfadan orijinal verileri görebilirsiniz:
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch gap-3 shrink-0">
+              <button
+                onClick={handleOpenLiveOfficial}
+                className="px-6 py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-400 hover:to-orange-400 text-black font-black text-sm shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:shadow-[0_0_40px_rgba(245,158,11,0.6)] active:scale-95 transition flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="w-5 h-5 stroke-[2.5]" />
+                <span>GERÇEK VERİLERİ RESMİ SİSTEMDE AÇ</span>
+              </button>
+
+              <button
+                onClick={handleToggleViewer}
+                className="px-5 py-4 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2"
+              >
+                <Globe className="w-4 h-4 text-amber-400" />
+                <span>{showInAppViewer ? 'Gömülü Ekranı Kapat' : 'Gömülü Ekranı Aç'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 4 Logistics Intelligence Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
