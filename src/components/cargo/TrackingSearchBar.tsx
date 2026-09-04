@@ -13,7 +13,10 @@ import {
   CheckCircle2,
   ChevronDown,
   Layers,
-  X
+  X,
+  ShieldCheck,
+  Zap,
+  Globe
 } from 'lucide-react';
 
 export const TrackingSearchBar: React.FC = () => {
@@ -55,6 +58,22 @@ export const TrackingSearchBar: React.FC = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4">
+      
+      {/* Real Live Info Banner */}
+      <div className="flex items-center justify-between px-4 py-2 rounded-2xl bg-black/40 border border-white/5 text-xs">
+        <div className="flex items-center gap-2 text-white/70">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="font-bold text-white">Canlı Resmi Kargo Takibi:</span>
+          <span className="text-white/50 hidden sm:inline">Takip numaranızı girin, sistem kargonuzu doğrudan firmanın resmi veritabanından sorgulasın.</span>
+        </div>
+        <span className="text-[10px] font-mono text-amber-400 font-bold hidden md:inline">
+          12 Kargo Firması Aktif
+        </span>
+      </div>
+
       {/* Main Search Box Card */}
       <div className="relative rounded-3xl bg-gradient-to-b from-[#111728]/95 to-[#0B0F1C]/95 border border-white/10 p-4 sm:p-6 shadow-[0_10px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl">
         
@@ -63,7 +82,7 @@ export const TrackingSearchBar: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
             <span className="text-xs font-black uppercase tracking-wider text-white/70">
-              Kargo Takip Numarası
+              Gerçek Kargo Takip Kodu
             </span>
           </div>
 
@@ -114,7 +133,10 @@ export const TrackingSearchBar: React.FC = () => {
                       selectedCarrierId === carrier.id ? 'bg-amber-500 text-black font-black' : 'hover:bg-white/5 text-white/80'
                     }`}
                   >
-                    <span>{carrier.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: carrier.logoColor }} />
+                      <span>{carrier.name}</span>
+                    </div>
                     {selectedCarrierId === carrier.id && <CheckCircle2 className="w-3.5 h-3.5" />}
                   </button>
                 ))}
@@ -132,7 +154,7 @@ export const TrackingSearchBar: React.FC = () => {
               required
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
-              placeholder="Örn: 123456789012, KP048291048TR, TY9841294812..."
+              placeholder="Gerçek kargo takip numaranızı buraya yazın..."
               className="w-full pl-12 pr-10 py-3.5 sm:py-4 rounded-2xl bg-black/60 border border-white/15 text-white placeholder-white/40 text-sm sm:text-base font-mono font-bold focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 transition-all"
             />
             {inputVal && (
@@ -154,12 +176,12 @@ export const TrackingSearchBar: React.FC = () => {
             {isLoading ? (
               <>
                 <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                <span>SORGULANIYOR...</span>
+                <span>RESMİ SİSTEME BAĞLANIYOR...</span>
               </>
             ) : (
               <>
                 <Truck className="w-5 h-5 stroke-[2.5]" />
-                <span>KARGOM NEREDE?</span>
+                <span>CANLI SORGULA</span>
               </>
             )}
           </button>
@@ -172,70 +194,55 @@ export const TrackingSearchBar: React.FC = () => {
           </p>
         )}
 
+        {/* Real detection badge when typing */}
+        {inputVal.trim() && detectedCarrier && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-amber-300 font-bold animate-in fade-in">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: detectedCarrier.logoColor }} />
+            <span>Format Algılandı: <strong className="text-white">{detectedCarrier.name}</strong> resmi takip kodudur.</span>
+          </div>
+        )}
+
         {/* Quick 1-Click Demo Buttons */}
         <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-mono font-bold uppercase text-white/50 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Hızlı Deneme:
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Örnek Test Kodları:
           </span>
 
           <button
             type="button"
             onClick={() => handleQuickDemo('123456789012', 'yurtici')}
-            className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-orange-500/20 border border-white/10 hover:border-orange-500/40 text-white/80 hover:text-white text-xs font-bold transition-all"
+            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/10 hover:border-amber-500/30 border border-white/5 text-[11px] font-mono font-bold text-white/70 hover:text-amber-300 transition-colors"
           >
-            🚚 Yurtiçi (Kurye Dağıtımda)
+            Yurtiçi (Örnek)
           </button>
 
           <button
             type="button"
             onClick={() => handleQuickDemo('KP048291048TR', 'ptt')}
-            className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-yellow-500/20 border border-white/10 hover:border-yellow-500/40 text-white/80 hover:text-white text-xs font-bold transition-all"
+            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/10 hover:border-amber-500/30 border border-white/5 text-[11px] font-mono font-bold text-white/70 hover:text-amber-300 transition-colors"
           >
-            📦 PTT (Şehirlerarası Yolda)
+            PTT Kargo (Örnek)
           </button>
 
           <button
             type="button"
             onClick={() => handleQuickDemo('TY9841294812', 'trendyol_express')}
-            className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-amber-500/20 border border-white/10 hover:border-amber-500/40 text-white/80 hover:text-white text-xs font-bold transition-all"
+            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/10 hover:border-amber-500/30 border border-white/5 text-[11px] font-mono font-bold text-white/70 hover:text-amber-300 transition-colors"
           >
-            ✅ Trendyol Express (Teslim Edildi)
+            Trendyol Express (Örnek)
           </button>
 
           <button
             type="button"
             onClick={() => handleQuickDemo('2489182948192', 'aras')}
-            className="px-2.5 py-1 rounded-xl bg-white/5 hover:bg-blue-500/20 border border-white/10 hover:border-blue-500/40 text-white/80 hover:text-white text-xs font-bold transition-all"
+            className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-amber-500/10 hover:border-amber-500/30 border border-white/5 text-[11px] font-mono font-bold text-white/70 hover:text-amber-300 transition-colors"
           >
-            🏢 Aras (Şubede Kabul)
+            Aras Kargo (Örnek)
           </button>
         </div>
 
       </div>
 
-      {/* Carrier Logos Grid Quick Strip */}
-      <div className="flex items-center justify-between gap-2 overflow-x-auto py-2 scrollbar-none opacity-80 hover:opacity-100 transition-opacity">
-        {CARRIER_LIST.slice(0, 8).map(carrier => (
-          <div
-            key={carrier.id}
-            onClick={() => {
-              setSelectedCarrierId(carrier.id);
-              esportsSound.playClick();
-            }}
-            className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 cursor-pointer whitespace-nowrap transition-all text-xs font-bold ${
-              selectedCarrierId === carrier.id
-                ? 'bg-amber-500/20 border-amber-500 text-white'
-                : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/60 hover:text-white'
-            }`}
-          >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: carrier.logoColor }}
-            />
-            <span>{carrier.shortName}</span>
-          </div>
-        ))}
-      </div>
     </div>
   );
 };

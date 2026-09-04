@@ -121,4 +121,8 @@ export interface Shipment {
   customLabel?: string;
   savedAt?: number;
   lastUpdated: number;
+
+  isRealLiveQuery?: boolean;
+  officialLiveUrl?: string;
+  isLiveApiData?: boolean;
 }
