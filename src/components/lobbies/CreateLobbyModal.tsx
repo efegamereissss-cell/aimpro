@@ -8,12 +8,14 @@ export const CreateLobbyModal: React.FC = () => {
   const setCreateModalOpen = useLobbyStore(state => state.setCreateModalOpen);
   const createLobby = useLobbyStore(state => state.createLobby);
 
+  const userProfile = useLobbyStore(state => state.userProfile);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [partyCode, setPartyCode] = useState('VALO-' + Math.floor(1000 + Math.random() * 9000));
-  const [hostName, setHostName] = useState('');
-  const [hostTag, setHostTag] = useState('TR1');
-  const [hostRank, setHostRank] = useState<ValorantRank>('platinum');
+  const [hostName, setHostName] = useState(userProfile.name || '');
+  const [hostTag, setHostTag] = useState(userProfile.tag || 'TR1');
+  const [hostRank, setHostRank] = useState<ValorantRank>(userProfile.rank || 'platinum');
   const [targetRankMin, setTargetRankMin] = useState<ValorantRank>('gold');
   const [targetRankMax, setTargetRankMax] = useState<ValorantRank>('diamond');
   const [neededRoles, setNeededRoles] = useState<AgentRole[]>(['duelist', 'controller']);
@@ -23,7 +25,51 @@ export const CreateLobbyModal: React.FC = () => {
   const [currentMembers, setCurrentMembers] = useState(3);
   const [maxMembers, setMaxMembers] = useState(5);
 
+  React.useEffect(() => {
+    if (isCreateModalOpen && userProfile.name && !hostName) {
+      setHostName(userProfile.name);
+      setHostTag(userProfile.tag);
+      setHostRank(userProfile.rank);
+    }
+  }, [isCreateModalOpen, userProfile]);
+
   if (!isCreateModalOpen) return null;
+
+  const applyPreset = (presetType: 'comp' | 'premier' | 'scrim' | 'casual') => {
+    if (presetType === 'comp') {
+      setTitle('Gece Rekabetçisi +18 Mikrofonlu Son 2 Kişi');
+      setDescription('İletişim kuracak, info verecek ve tilt olmayacak takım arkadaşları arıyoruz.');
+      setMode('competitive');
+      setServer('istanbul');
+      setMicRequirement('required');
+      setCurrentMembers(3);
+      setMaxMembers(5);
+    } else if (presetType === 'premier') {
+      setTitle('Premier Turnuva Kadrosu • Antrenmanlı 5v5');
+      setDescription('Haftalık Premier maçları için düzenli oynayacak ve rolünü bilen oyuncular.');
+      setMode('premier');
+      setServer('istanbul');
+      setMicRequirement('discord');
+      setCurrentMembers(4);
+      setMaxMembers(5);
+    } else if (presetType === 'scrim') {
+      setTitle('5v5 Özel Maç / Scrim Rakip veya Takım');
+      setDescription('Turnuva öncesi harita antrenmanı ve taktik denemeleri için özel lobi.');
+      setMode('custom');
+      setServer('istanbul');
+      setMicRequirement('required');
+      setCurrentMembers(2);
+      setMaxMembers(10);
+    } else {
+      setTitle("Spike'a Hücum / Chill Eğlence");
+      setDescription('Rank kasmadan görev yapmalık, eğlencesine seri oyun.');
+      setMode('spikerush');
+      setServer('istanbul');
+      setMicRequirement('optional');
+      setCurrentMembers(2);
+      setMaxMembers(5);
+    }
+  };
 
   const handleToggleRole = (role: AgentRole) => {
     if (neededRoles.includes(role)) {
@@ -89,8 +135,45 @@ export const CreateLobbyModal: React.FC = () => {
           </button>
         </div>
 
+        {/* Quick Presets Selection */}
+        <div className="mt-5 p-3 rounded-2xl bg-black/40 border border-white/10 space-y-2">
+          <span className="text-[10px] font-mono font-bold uppercase text-white/50 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-[#FF4655]" /> Hızlı Lobi Şablonu Seç (Tek Tıkla Doldur):
+          </span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => applyPreset('comp')}
+              className="py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-[#FF4655]/20 hover:border-[#FF4655]/50 border border-white/10 font-bold text-left transition-all text-white/80 hover:text-white"
+            >
+              🔥 Rekabetçi Gece
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('premier')}
+              className="py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-purple-600/20 hover:border-purple-500/50 border border-white/10 font-bold text-left transition-all text-white/80 hover:text-white"
+            >
+              🛡️ Premier Kadro
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('scrim')}
+              className="py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:border-cyan-500/50 border border-white/10 font-bold text-left transition-all text-white/80 hover:text-white"
+            >
+              ⚔️ 5v5 Scrim Özel
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('casual')}
+              className="py-1.5 px-2.5 rounded-xl bg-white/5 hover:bg-emerald-500/20 hover:border-emerald-500/50 border border-white/10 font-bold text-left transition-all text-white/80 hover:text-white"
+            >
+              ⚡ Spike Chill
+            </button>
+          </div>
+        </div>
+
         {/* Form */}
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           
           {/* Party Code & Title */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

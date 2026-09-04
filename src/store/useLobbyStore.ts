@@ -1,7 +1,14 @@
 import { create } from 'zustand';
-import { Lobby, LobbyFilterState } from '../types/esports';
+import { Lobby, LobbyFilterState, ValorantRank, AgentRole } from '../types/esports';
 import { esportsSound } from '../utils/soundEffects';
-import { teamComStorage } from '../services/storage/TeamComStorage';
+import { teamComStorage, getLocalUserId } from '../services/storage/TeamComStorage';
+
+export interface UserProfile {
+  name: string;
+  tag: string;
+  rank: ValorantRank;
+  role: AgentRole;
+}
 
 interface LobbyStore {
   lobbies: Lobby[];
@@ -9,11 +16,13 @@ interface LobbyStore {
   copiedLobbyId: string | null;
   isCreateModalOpen: boolean;
   toastMessage: string | null;
+  userProfile: UserProfile;
 
   // Actions
   init: () => Promise<void>;
   setFilters: (filters: Partial<LobbyFilterState>) => void;
   resetFilters: () => void;
+  setUserProfile: (profile: Partial<UserProfile>) => void;
   createLobby: (lobby: Omit<Lobby, 'id' | 'createdAt' | 'isFull'>) => Promise<void>;
   copyPartyCode: (lobbyId: string, partyCode: string) => Promise<void>;
   toggleLobbyFull: (lobbyId: string) => Promise<void>;
@@ -28,7 +37,22 @@ const DEFAULT_FILTERS: LobbyFilterState = {
   role: 'all',
   mode: 'all',
   server: 'all',
-  mic: 'all'
+  mic: 'all',
+  onlyOpen: false
+};
+
+const getSavedUserProfile = (): UserProfile => {
+  if (typeof window === 'undefined') {
+    return { name: '', tag: 'TR1', rank: 'platinum', role: 'duelist' };
+  }
+  try {
+    const raw = localStorage.getItem('teamcom_user_profile');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.name) return parsed;
+    }
+  } catch {}
+  return { name: '', tag: 'TR1', rank: 'platinum', role: 'duelist' };
 };
 
 // Initial sync from localStorage
@@ -50,9 +74,10 @@ export const useLobbyStore = create<LobbyStore>((set, get) => ({
   copiedLobbyId: null,
   isCreateModalOpen: false,
   toastMessage: null,
+  userProfile: getSavedUserProfile(),
 
   init: async () => {
-    // Load from permanent IndexedDB + Cloud
+    // Load from permanent IndexedDB + Real-Time Cloud
     await teamComStorage.init((remoteLobbies) => {
       set({ lobbies: remoteLobbies });
     });
@@ -70,13 +95,31 @@ export const useLobbyStore = create<LobbyStore>((set, get) => ({
 
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
 
+  setUserProfile: (profile) => {
+    const updated = { ...get().userProfile, ...profile };
+    set({ userProfile: updated });
+    try {
+      localStorage.setItem('teamcom_user_profile', JSON.stringify(updated));
+    } catch {}
+  },
+
   createLobby: async (lobbyData) => {
     const newLobby: Lobby = {
       ...lobbyData,
-      id: 'lobby-' + Math.random().toString(36).substring(2, 9),
+      id: 'lobby-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 7),
       createdAt: Date.now(),
-      isFull: false
+      isFull: false,
+      ownerId: getLocalUserId()
     };
+
+    // Save profile name & tag if provided
+    if (lobbyData.hostName) {
+      get().setUserProfile({
+        name: lobbyData.hostName,
+        tag: lobbyData.hostTag || 'TR1',
+        rank: lobbyData.hostRank
+      });
+    }
 
     const current = get().lobbies;
     const updated = [newLobby, ...current];
@@ -84,16 +127,16 @@ export const useLobbyStore = create<LobbyStore>((set, get) => ({
     set({
       lobbies: updated,
       isCreateModalOpen: false,
-      toastMessage: `Lobi Başarıyla Oluşturuldu! Kod: ${newLobby.partyCode}`
+      toastMessage: `Lobi Başarıyla Yayınlandı! Kod: ${newLobby.partyCode}`
     });
 
-    // Permanent IndexedDB & Cloud Save
-    await teamComStorage.saveLobbies(updated);
+    // Real-Time Global Broadcast & Local Save
+    await teamComStorage.broadcastCreateLobby(newLobby);
 
     esportsSound.playCodeCopied();
     setTimeout(() => {
       set({ toastMessage: null });
-    }, 3500);
+    }, 4000);
   },
 
   copyPartyCode: async (lobbyId, partyCode) => {
@@ -120,24 +163,31 @@ export const useLobbyStore = create<LobbyStore>((set, get) => ({
           copiedLobbyId: state.copiedLobbyId === lobbyId ? null : state.copiedLobbyId,
           toastMessage: null
         }));
-      }, 2500);
+      }, 3000);
     } catch (err) {
       console.error('Failed to copy party code:', err);
     }
   },
 
   toggleLobbyFull: async (lobbyId) => {
-    const updated = get().lobbies.map(l =>
-      l.id === lobbyId ? { ...l, isFull: !l.isFull } : l
-    );
+    const target = get().lobbies.find(l => l.id === lobbyId);
+    if (!target) return;
+    const updatedLobby = { ...target, isFull: !target.isFull };
+    const updated = get().lobbies.map(l => l.id === lobbyId ? updatedLobby : l);
     set({ lobbies: updated });
-    await teamComStorage.saveLobbies(updated);
+    await teamComStorage.broadcastCreateLobby(updatedLobby);
   },
 
   deleteLobby: async (lobbyId) => {
     const updated = get().lobbies.filter(l => l.id !== lobbyId);
-    set({ lobbies: updated });
-    await teamComStorage.saveLobbies(updated);
+    set({
+      lobbies: updated,
+      toastMessage: 'Lobi Başarıyla Kaldırıldı'
+    });
+    await teamComStorage.broadcastDeleteLobby(lobbyId);
+    setTimeout(() => {
+      set({ toastMessage: null });
+    }, 2500);
   },
 
   setCreateModalOpen: (open) => set({ isCreateModalOpen: open }),

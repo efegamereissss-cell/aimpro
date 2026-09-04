@@ -26,6 +26,7 @@ export interface Lobby {
   hostTag: string; // e.g. TR1
   hostRank: ValorantRank;
   hostAvatar?: string;
+  ownerId?: string; // Client ID of the creator for management/deletion
   targetRankMin: ValorantRank;
   targetRankMax: ValorantRank;
   neededRoles: AgentRole[];
@@ -47,6 +48,7 @@ export interface LobbyFilterState {
   mode: GameMode | 'all';
   server: ServerRegion | 'all';
   mic: MicRequirement | 'all';
+  onlyOpen?: boolean;
 }
 
 export interface VideoClip {
@@ -64,6 +66,7 @@ export interface VideoClip {
   views: number;
   commentsCount: number;
   createdAt: number;
+  ownerId?: string;
   tags: string[];
 }
 

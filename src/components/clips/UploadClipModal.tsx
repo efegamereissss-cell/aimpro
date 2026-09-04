@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useClipsStore } from '../../store/useClipsStore';
+import { useLobbyStore } from '../../store/useLobbyStore';
 import { ValorantRank } from '../../types/esports';
 import { X, Upload, Film, Sparkles, CheckCircle2, Link as LinkIcon } from 'lucide-react';
 
@@ -10,16 +11,24 @@ export const UploadClipModal: React.FC = () => {
   const isUploadModalOpen = useClipsStore(state => state.isUploadModalOpen);
   const setUploadModalOpen = useClipsStore(state => state.setUploadModalOpen);
   const addClip = useClipsStore(state => state.addClip);
+  const userProfile = useLobbyStore(state => state.userProfile);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [authorName, setAuthorName] = useState('');
-  const [authorRank, setAuthorRank] = useState<ValorantRank>('diamond');
+  const [authorName, setAuthorName] = useState(userProfile.name || '');
+  const [authorRank, setAuthorRank] = useState<ValorantRank>(userProfile.rank || 'diamond');
   const [agent, setAgent] = useState('Jett');
   const [map, setMap] = useState('Ascent');
   const [videoUrl, setVideoUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isUploadModalOpen && userProfile.name && !authorName) {
+      setAuthorName(userProfile.name);
+      setAuthorRank(userProfile.rank);
+    }
+  }, [isUploadModalOpen, userProfile]);
 
   if (!isUploadModalOpen) return null;
 

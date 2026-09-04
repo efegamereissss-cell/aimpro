@@ -5,20 +5,46 @@ import { ClipsView } from './components/clips/ClipsView';
 import { GuessTheRank } from './components/rankGame/GuessTheRank';
 import { ProCrosshairs } from './components/crosshair/ProCrosshairs';
 import { VctMatches } from './components/vct/VctMatches';
-import { Users, Flame, ExternalLink, Heart } from 'lucide-react';
+import { TacticalBackground } from './components/ui/TacticalBackground';
+import { Users, Flame, ExternalLink, Heart, Radio, Activity, ShieldCheck } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('lobbies');
 
   return (
-    <div className="min-h-screen bg-[#07090E] text-slate-100 flex flex-col font-sans selection:bg-[#FF4655] selection:text-white">
+    <div className="min-h-screen tactical-bg text-slate-100 flex flex-col font-sans selection:bg-[#FF4655] selection:text-white relative overflow-x-hidden">
       
-      {/* Background Ambient Glows */}
-      <div className="fixed top-0 left-1/4 w-96 h-96 bg-[#FF4655]/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-10 right-1/4 w-96 h-96 bg-cyan-500/5 rounded-full blur-[120px] pointer-events-none" />
+      {/* Dynamic Cyber Tactical Esports Background */}
+      <TacticalBackground />
 
       {/* Main Navbar */}
       <EsportsNavbar activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {/* Live Tactical Esports Ticker Bar */}
+      <div className="relative z-20 bg-[#090D17]/90 border-b border-white/5 py-1.5 px-4 overflow-hidden backdrop-blur-md">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-[11px] font-mono font-semibold text-white/60">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-black text-white uppercase tracking-wider text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.2 rounded">
+              AĞ DURUMU
+            </span>
+          </div>
+
+          <div className="overflow-hidden whitespace-nowrap ml-4 flex-1">
+            <div className="inline-block animate-marquee pl-4">
+              <span className="text-[#FF4655] font-black">VALORANT PROTOCOL:</span> 🇹🇷 İstanbul Sunucusu (Ping: 4ms) // 🟢 Küresel Gerçek Zamanlı Senkronizasyon Açık // ⚡ Kodunu Kopyala, Doğrudan Partiye Katıl // 👑 Radyant & Yücelik Premadeler Aktif // 🛡️ Premier & Turnuva Takımları Kuruluyor
+            </div>
+          </div>
+
+          <div className="hidden md:flex items-center gap-4 shrink-0 pl-4 text-[10px] text-white/40">
+            <span className="flex items-center gap-1"><ShieldCheck className="w-3 h-3 text-cyan-400" /> %100 Doğrulanmış Lobiler</span>
+            <span>V2.8.4</span>
+          </div>
+        </div>
+      </div>
 
       {/* Main View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 relative z-10">

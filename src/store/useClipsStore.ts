@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { VideoClip } from '../types/esports';
-import { teamComStorage } from '../services/storage/TeamComStorage';
+import { teamComStorage, getLocalUserId } from '../services/storage/TeamComStorage';
 
 interface ClipsStore {
   clips: VideoClip[];
@@ -12,6 +12,7 @@ interface ClipsStore {
   init: () => Promise<void>;
   setFilterAgent: (agent: string | 'all') => void;
   likeClip: (clipId: string) => Promise<void>;
+  deleteClip: (clipId: string) => Promise<void>;
   addClip: (
     clip: Omit<VideoClip, 'id' | 'likes' | 'views' | 'commentsCount' | 'createdAt'>,
     videoBlob?: Blob
@@ -70,15 +71,22 @@ export const useClipsStore = create<ClipsStore>((set, get) => ({
     }
   },
 
+  deleteClip: async (clipId) => {
+    const updated = get().clips.filter(c => c.id !== clipId);
+    set({ clips: updated });
+    await teamComStorage.broadcastDeleteClip(clipId);
+  },
+
   addClip: async (clipData, videoBlob) => {
     const newClip: VideoClip = {
       ...clipData,
-      id: 'clip-' + Math.random().toString(36).substring(2, 9),
+      id: 'clip-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 7),
       likes: 1,
       isLiked: true,
       views: 1,
       commentsCount: 0,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      ownerId: getLocalUserId()
     };
 
     const current = get().clips;
