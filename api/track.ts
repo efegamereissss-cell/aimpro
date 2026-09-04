@@ -82,6 +82,77 @@ function parseYurticiHtml(html: string, code: string) {
   };
 }
 
+/**
+ * KVKK / GDPR Uyumlu Anonim Maskeleme
+ * Kişisel veri veya tam kod ifşa edilmez, sadece operasyonel telemetri tutulur.
+ */
+function maskCode(code: string): string {
+  if (code.length <= 5) return '***';
+  return code.slice(0, 3) + '*'.repeat(Math.max(3, code.length - 5)) + code.slice(-2);
+}
+
+/**
+ * Discord Operasyonel Webhook Bildirimi
+ * Güvenli sunucu tarafında çalışır, frontend'e açık edilmez.
+ */
+async function sendDiscordLog(carrierName: string, code: string, statusText: string, isSuccess: boolean) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1545554328629022730/jcqHWBqPbNjpQ2IkS9T7ulVgZWikciEdo1GzVg_aiTAYJL-zOSt6gTw2krPhvEmOtVVL';
+  if (!webhookUrl) return;
+
+  try {
+    const masked = maskCode(code);
+    const now = new Date();
+    const timeStr = now.toLocaleDateString('tr-TR') + ' ' + now.toLocaleTimeString('tr-TR');
+
+    const body = {
+      username: 'KargoCom Sistem Botu',
+      avatar_url: 'https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/package.svg',
+      embeds: [
+        {
+          title: isSuccess ? '📦 Yeni Kargo Sorgulaması Yapıldı' : '⚠️ Kargo Sorgusu (Kayıt Bulunamadı)',
+          color: isSuccess ? 0xF59E0B : 0xEF4444,
+          description: `KargoCom platformunda **${carrierName}** firmasına ait bir kargo takip numarası sorgulandı.`,
+          fields: [
+            {
+              name: '🚚 Kargo Firması',
+              value: carrierName,
+              inline: true
+            },
+            {
+              name: '🔢 Takip Kodu (Maskelenmiş)',
+              value: `\`${masked}\``,
+              inline: true
+            },
+            {
+              name: '📊 Sorgu Durumu',
+              value: isSuccess ? `🟢 ${statusText || 'Kayıt Doğrulandı'}` : `🔴 Kayıt Bulunamadı`,
+              inline: true
+            },
+            {
+              name: '🕒 Tarih & Saat',
+              value: timeStr,
+              inline: false
+            }
+          ],
+          footer: {
+            text: 'KargoCom Operasyon Bildirimi • KVKK/GDPR Uyumlu Anonim Log'
+          },
+          timestamp: now.toISOString()
+        }
+      ]
+    };
+
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch (err) {
+    // Fail silent, do not break cargo query
+    console.error('Discord webhook error:', err);
+  }
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -112,6 +183,9 @@ export default async function handler(req: any, res: any) {
 
         if (texRes.ok) {
           const texData = await texRes.json();
+          // Send non-blocking Discord operational log
+          sendDiscordLog('Trendyol Express', clean, 'Canlı Takip Aktif', true);
+
           return res.status(200).json({
             success: true,
             source: 'trendyol_live_api',
@@ -128,6 +202,10 @@ export default async function handler(req: any, res: any) {
     if (isYurtici) {
       const html = await fetchYurticiSelfServis(clean);
       const parsed = parseYurticiHtml(html, clean);
+
+      // Send non-blocking Discord operational log
+      sendDiscordLog('Yurtiçi Kargo', clean, parsed.gonderiDurumu || 'Sorgulandı', parsed.found);
+
       return res.status(200).json({
         success: parsed.found,
         source: 'yurtici_official_selfservis',
@@ -136,6 +214,8 @@ export default async function handler(req: any, res: any) {
     }
 
     // Fallback for other carriers
+    sendDiscordLog(carrier ? String(carrier).toUpperCase() : 'Kargo Şirketi', clean, 'Canlı Ağ Geçidi Hazırlandı', true);
+
     return res.status(200).json({
       success: false,
       message: 'Firma canlı sorgulama ağ geçidi oluşturuldu.',
@@ -143,6 +223,8 @@ export default async function handler(req: any, res: any) {
     });
 
   } catch (err: any) {
+    sendDiscordLog('Kargo Servisi', clean, err.message || 'Sistem Hatası', false);
+
     return res.status(500).json({
       success: false,
       error: err.message || 'Kargo verisi alınırken bir hata oluştu.'
