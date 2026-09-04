@@ -243,8 +243,8 @@ export default async function handler(req: any, res: any) {
       if (traffic.count > RATE_LIMIT_MAX) {
         // Block client for 30 seconds
         traffic.blockedUntil = now + BLOCK_DURATION_MS;
-        // Trigger DDoS Alert to Discord
-        sendDdosAlert(clientHash, traffic.count);
+        // Trigger DDoS Alert to Discord immediately
+        await sendDdosAlert(clientHash, traffic.count);
 
         return res.status(429).json({
           error: 'Güvenlik Kalkanı: Çok fazla istek algılandı. 30 saniye bekleniyor.'
@@ -267,7 +267,7 @@ export default async function handler(req: any, res: any) {
   const rawInput = code.trim();
   const dangerousPatterns = /[<>{}\\\/\"';`]|union\s+select|select\s+.*\s+from|drop\s+table|<script/i;
   if (dangerousPatterns.test(rawInput) || rawInput.length > 40) {
-    sendInjectionAlert(clientHash, rawInput);
+    await sendInjectionAlert(clientHash, rawInput);
     return res.status(400).json({
       error: 'Geçersiz kargo takip numarası formatı. Özel karakter veya komut içeremez.'
     });
@@ -288,7 +288,7 @@ export default async function handler(req: any, res: any) {
 
         if (texRes.ok) {
           const texData = await texRes.json();
-          sendQueryLog('Trendyol Express', clean, 'Canlı Takip Aktif', true, clientHash);
+          await sendQueryLog('Trendyol Express', clean, 'Canlı Takip Aktif', true, clientHash);
 
           return res.status(200).json({
             success: true,
@@ -307,7 +307,7 @@ export default async function handler(req: any, res: any) {
       const html = await fetchYurticiSelfServis(clean);
       const parsed = parseYurticiHtml(html, clean);
 
-      sendQueryLog('Yurtiçi Kargo', clean, parsed.gonderiDurumu || 'Sorgulandı', parsed.found, clientHash);
+      await sendQueryLog('Yurtiçi Kargo', clean, parsed.gonderiDurumu || 'Sorgulandı', parsed.found, clientHash);
 
       return res.status(200).json({
         success: parsed.found,
@@ -317,7 +317,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // Fallback for other carriers
-    sendQueryLog(carrier ? String(carrier).toUpperCase() : 'Kargo Şirketi', clean, 'Canlı Ağ Geçidi Hazırlandı', true, clientHash);
+    await sendQueryLog(carrier ? String(carrier).toUpperCase() : 'Kargo Şirketi', clean, 'Canlı Ağ Geçidi Hazırlandı', true, clientHash);
 
     return res.status(200).json({
       success: false,
@@ -326,7 +326,7 @@ export default async function handler(req: any, res: any) {
     });
 
   } catch (err: any) {
-    sendQueryLog('Kargo Servisi', clean, err.message || 'Sistem Hatası', false, clientHash);
+    await sendQueryLog('Kargo Servisi', clean, err.message || 'Sistem Hatası', false, clientHash);
 
     return res.status(500).json({
       success: false,

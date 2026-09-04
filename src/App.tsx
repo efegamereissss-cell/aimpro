@@ -35,10 +35,12 @@ export function App() {
   useEffect(() => {
     init();
 
-    // Log visitor activity to Discord (once per session, privacy safe)
+    // Real-time visitor activity ping to Discord
     try {
-      if (typeof window !== 'undefined' && !sessionStorage.getItem('kargocom_visit_logged')) {
-        sessionStorage.setItem('kargocom_visit_logged', '1');
+      if (typeof window !== 'undefined') {
+        const lastPing = Number(sessionStorage.getItem('kargocom_last_visit_ping') || 0);
+        if (Date.now() - lastPing > 10000) {
+          sessionStorage.setItem('kargocom_last_visit_ping', String(Date.now()));
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         const browser = navigator.userAgent.includes('Chrome') ? 'Google Chrome' :
                         navigator.userAgent.includes('Firefox') ? 'Mozilla Firefox' :
@@ -54,6 +56,7 @@ export function App() {
             path: 'Ana Sayfa'
           })
         }).catch(() => {});
+        }
       }
     } catch {}
   }, [init]);

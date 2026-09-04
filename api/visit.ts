@@ -28,8 +28,8 @@ export default async function handler(req: any, res: any) {
   const now = Date.now();
   const lastVisit = recentVisits.get(clientHash) || 0;
 
-  // 5 minutes cooldown per client hash to prevent Discord spamming
-  if (now - lastVisit < 5 * 60 * 1000) {
+  // 5 seconds cooldown per client hash to prevent double firing while being real-time
+  if (now - lastVisit < 5 * 1000) {
     return res.status(200).json({ ok: true, cached: true });
   }
   recentVisits.set(clientHash, now);
