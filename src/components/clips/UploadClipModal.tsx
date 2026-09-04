@@ -38,16 +38,19 @@ export const UploadClipModal: React.FC = () => {
     const finalUrl = videoUrl.trim() || previewUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
     if (!title.trim() || !authorName.trim()) return;
 
-    addClip({
-      title: title.trim(),
-      description: description.trim() || `${agent} ile ${map} haritasında muazzam bir raunt!`,
-      authorName: authorName.trim(),
-      authorRank,
-      videoUrl: finalUrl,
-      agent,
-      map,
-      tags: [agent, map, 'Topluluk Klibi']
-    });
+    addClip(
+      {
+        title: title.trim(),
+        description: description.trim() || `${agent} ile ${map} haritasında muazzam bir raunt!`,
+        authorName: authorName.trim(),
+        authorRank,
+        videoUrl: finalUrl,
+        agent,
+        map,
+        tags: [agent, map, 'Topluluk Klibi']
+      },
+      selectedFile || undefined
+    );
   };
 
   return (

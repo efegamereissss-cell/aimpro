@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { VideoClip } from '../types/esports';
-import { INITIAL_CLIPS } from '../data/mockClips';
+import { teamComStorage } from '../services/storage/TeamComStorage';
 
 interface ClipsStore {
   clips: VideoClip[];
@@ -9,56 +9,68 @@ interface ClipsStore {
   activePlayingClipId: string | null;
 
   // Actions
+  init: () => Promise<void>;
   setFilterAgent: (agent: string | 'all') => void;
-  likeClip: (clipId: string) => void;
-  addClip: (clip: Omit<VideoClip, 'id' | 'likes' | 'views' | 'commentsCount' | 'createdAt'>) => void;
+  likeClip: (clipId: string) => Promise<void>;
+  addClip: (
+    clip: Omit<VideoClip, 'id' | 'likes' | 'views' | 'commentsCount' | 'createdAt'>,
+    videoBlob?: Blob
+  ) => Promise<void>;
   setUploadModalOpen: (open: boolean) => void;
   setActivePlayingClipId: (id: string | null) => void;
 }
 
-const STORAGE_KEY = 'teamcom_clips_v2';
-
-const loadClips = (): VideoClip[] => {
-  if (typeof window === 'undefined') return INITIAL_CLIPS;
+const getImmediateLocalClips = (): VideoClip[] => {
+  if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem('teamcom_clips_permanent');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
-  return INITIAL_CLIPS;
+  return [];
 };
 
-export const useClipsStore = create<ClipsStore>((set) => ({
-  clips: loadClips(),
+export const useClipsStore = create<ClipsStore>((set, get) => ({
+  clips: getImmediateLocalClips(),
   filterAgent: 'all',
   isUploadModalOpen: false,
   activePlayingClipId: null,
 
-  setFilterAgent: (agent) => set({ filterAgent: agent }),
-
-  likeClip: (clipId) => {
-    set(state => {
-      const updated = state.clips.map(c => {
-        if (c.id === clipId) {
-          const isLiked = !c.isLiked;
-          return {
-            ...c,
-            isLiked,
-            likes: isLiked ? c.likes + 1 : Math.max(0, c.likes - 1)
-          };
-        }
-        return c;
-      });
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
-      return { clips: updated };
+  init: async () => {
+    await teamComStorage.init(undefined, (remoteClips) => {
+      set({ clips: remoteClips });
     });
+    const loaded = await teamComStorage.getClips();
+    if (loaded && loaded.length > 0) {
+      set({ clips: loaded });
+    }
   },
 
-  addClip: (clipData) => {
+  setFilterAgent: (agent) => set({ filterAgent: agent }),
+
+  likeClip: async (clipId) => {
+    const updated = get().clips.map(c => {
+      if (c.id === clipId) {
+        const isLiked = !c.isLiked;
+        return {
+          ...c,
+          isLiked,
+          likes: isLiked ? c.likes + 1 : Math.max(0, c.likes - 1)
+        };
+      }
+      return c;
+    });
+
+    set({ clips: updated });
+    const target = updated.find(c => c.id === clipId);
+    if (target) {
+      await teamComStorage.saveClip(target);
+    }
+  },
+
+  addClip: async (clipData, videoBlob) => {
     const newClip: VideoClip = {
       ...clipData,
       id: 'clip-' + Math.random().toString(36).substring(2, 9),
@@ -69,18 +81,23 @@ export const useClipsStore = create<ClipsStore>((set) => ({
       createdAt: Date.now()
     };
 
-    set(state => {
-      const updated = [newClip, ...state.clips];
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
-      return {
-        clips: updated,
-        isUploadModalOpen: false
-      };
+    const current = get().clips;
+    const updated = [newClip, ...current];
+
+    set({
+      clips: updated,
+      isUploadModalOpen: false
     });
+
+    // Permanent IndexedDB Blob save (survives refreshes!)
+    await teamComStorage.saveClip(newClip, videoBlob);
   },
 
   setUploadModalOpen: (open) => set({ isUploadModalOpen: open }),
   setActivePlayingClipId: (id) => set({ activePlayingClipId: id })
 }));
+
+// Auto-run init on client
+if (typeof window !== 'undefined') {
+  useClipsStore.getState().init();
+}
