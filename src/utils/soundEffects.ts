@@ -1,140 +1,177 @@
 /**
- * Web Audio API Sound Effects for Premate Valorant Esports Portal
+ * High-Fidelity Tactical Esports Sound Manager
+ * Plays authentic, deep, punchy 'TOK' audio samples with multi-voice pooling
  */
 class EsportsSoundManager {
-  private ctx: AudioContext | null = null;
   public isMuted: boolean = false;
+  public volume: number = 0.85;
 
-  private init() {
-    if (!this.ctx) {
+  // Multi-voice audio pools for zero latency and rapid spam without cutoff
+  private audioPools: Map<string, HTMLAudioElement[]> = new Map();
+  private poolIndex: Map<string, number> = new Map();
+  private poolSize = 6;
+
+  private soundSources = {
+    copy: '/sounds/tok_copy.wav',
+    click: '/sounds/tok_click.wav',
+    lobby: '/sounds/tok_lobby.wav',
+    success: '/sounds/tok_success.wav',
+    error: '/sounds/tok_error.wav'
+  };
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedMute = localStorage.getItem('teamcom_sound_muted');
+        if (savedMute !== null) {
+          this.isMuted = savedMute === 'true';
+        }
+        const savedVol = localStorage.getItem('teamcom_sound_volume');
+        if (savedVol !== null) {
+          this.volume = Math.max(0, Math.min(1, parseFloat(savedVol)));
+        }
+      } catch {}
+
+      this.preloadAudioPools();
+    }
+  }
+
+  private preloadAudioPools() {
+    Object.entries(this.soundSources).forEach(([key, src]) => {
+      const pool: HTMLAudioElement[] = [];
+      for (let i = 0; i < this.poolSize; i++) {
+        const audio = new Audio(src);
+        audio.preload = 'auto';
+        audio.volume = this.volume;
+        pool.push(audio);
+      }
+      this.audioPools.set(key, pool);
+      this.poolIndex.set(key, 0);
+    });
+  }
+
+  private playSound(key: keyof typeof this.soundSources, fallbackFreq = 180) {
+    if (this.isMuted) return;
+
+    try {
+      const pool = this.audioPools.get(key);
+      if (pool && pool.length > 0) {
+        const idx = this.poolIndex.get(key) || 0;
+        const audio = pool[idx];
+        this.poolIndex.set(key, (idx + 1) % pool.length);
+
+        audio.volume = this.volume;
+        audio.currentTime = 0;
+        const promise = audio.play();
+        if (promise !== undefined) {
+          promise.catch(() => {
+            // Autoplay policy or fetch error fallback to deep web audio tok
+            this.playSyntheticTok(fallbackFreq);
+          });
+        }
+        return;
+      }
+    } catch {
+      this.playSyntheticTok(fallbackFreq);
+    }
+  }
+
+  /**
+   * Deep, tactile sub-bass "TOK" synthesis fallback (Low-pass filtered, punchy mechanical thud)
+   */
+  private playSyntheticTok(baseFreq = 140) {
+    if (this.isMuted || typeof window === 'undefined') return;
+    try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
-    }
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
-    }
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+
+      const now = ctx.currentTime;
+
+      // 1. Transient mechanical snap
+      const oscSnap = ctx.createOscillator();
+      const gainSnap = ctx.createGain();
+      oscSnap.type = 'triangle';
+      oscSnap.frequency.setValueAtTime( baseFreq * 2.2, now);
+      oscSnap.frequency.exponentialRampToValueAtTime( baseFreq, now + 0.02);
+      gainSnap.gain.setValueAtTime(0.3 * this.volume, now);
+      gainSnap.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+      oscSnap.connect(gainSnap);
+      gainSnap.connect(ctx.destination);
+      oscSnap.start(now);
+      oscSnap.stop(now + 0.035);
+
+      // 2. Deep acoustic body ("TOK" resonance)
+      const oscBody = ctx.createOscillator();
+      const gainBody = ctx.createGain();
+      oscBody.type = 'sine';
+      oscBody.frequency.setValueAtTime(baseFreq, now);
+      oscBody.frequency.exponentialRampToValueAtTime(65, now + 0.07);
+      gainBody.gain.setValueAtTime(0.55 * this.volume, now);
+      gainBody.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      oscBody.connect(gainBody);
+      gainBody.connect(ctx.destination);
+      oscBody.start(now);
+      oscBody.stop(now + 0.12);
+    } catch {}
   }
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
+    try {
+      localStorage.setItem('teamcom_sound_muted', String(this.isMuted));
+    } catch {}
+    if (!this.isMuted) {
+      this.playClick();
+    }
     return this.isMuted;
   }
 
+  public setVolume(vol: number) {
+    this.volume = Math.max(0, Math.min(1, vol));
+    try {
+      localStorage.setItem('teamcom_sound_volume', String(this.volume));
+    } catch {}
+    this.audioPools.forEach(pool => {
+      pool.forEach(a => { a.volume = this.volume; });
+    });
+  }
+
   /**
-   * Valorant-style Party Code Copied sound (Chime / Equip sound)
+   * Signature Deep 'THOCK' Party Code Copied Sound
    */
   public playCodeCopied() {
-    if (this.isMuted) return;
-    try {
-      this.init();
-      if (!this.ctx) return;
-
-      const now = this.ctx.currentTime;
-      
-      // Chime 1
-      const osc1 = this.ctx.createOscillator();
-      const gain1 = this.ctx.createGain();
-      osc1.type = 'triangle';
-      osc1.frequency.setValueAtTime(587.33, now); // D5
-      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
-      gain1.gain.setValueAtTime(0.25, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(this.ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-
-      // Chime 2 (Harmonic octave)
-      const osc2 = this.ctx.createOscillator();
-      const gain2 = this.ctx.createGain();
-      osc2.type = 'sine';
-      osc2.frequency.setValueAtTime(1174.66, now + 0.08); // D6
-      gain2.gain.setValueAtTime(0.2, now + 0.08);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-      osc2.connect(gain2);
-      gain2.connect(this.ctx.destination);
-      osc2.start(now + 0.08);
-      osc2.stop(now + 0.45);
-    } catch {
-      // AudioContext unavailable
-    }
+    this.playSound('copy', 130);
   }
 
   /**
-   * Correct Rank Guess Fanfare
-   */
-  public playGuessCorrect() {
-    if (this.isMuted) return;
-    try {
-      this.init();
-      if (!this.ctx) return;
-
-      const now = this.ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 (Major triad victory)
-
-      notes.forEach((freq, idx) => {
-        if (!this.ctx) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
-        gain.gain.setValueAtTime(0.25, now + idx * 0.08);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.3);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start(now + idx * 0.08);
-        osc.stop(now + idx * 0.08 + 0.3);
-      });
-    } catch {}
-  }
-
-  /**
-   * Incorrect Rank Guess Buzzer
-   */
-  public playGuessWrong() {
-    if (this.isMuted) return;
-    try {
-      this.init();
-      if (!this.ctx) return;
-
-      const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(180, now);
-      osc.frequency.linearRampToValueAtTime(120, now + 0.25);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.28);
-    } catch {}
-  }
-
-  /**
-   * Subtle Button Click sound
+   * Tactile Mechanical Switch UI Click
    */
   public playClick() {
-    if (this.isMuted) return;
-    try {
-      this.init();
-      if (!this.ctx) return;
+    this.playSound('click', 200);
+  }
 
-      const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(900, now);
-      osc.frequency.exponentialRampToValueAtTime(400, now + 0.04);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.05);
-    } catch {}
+  /**
+   * Heavy Valorant Lock-in / Lobby Created Impact
+   */
+  public playLobbyCreated() {
+    this.playSound('lobby', 110);
+  }
+
+  /**
+   * Victory / Correct Guess Sound
+   */
+  public playGuessCorrect() {
+    this.playSound('success', 160);
+  }
+
+  /**
+   * Low Muted Thud on Incorrect Guess
+   */
+  public playGuessWrong() {
+    this.playSound('error', 85);
   }
 }
 
 export const esportsSound = new EsportsSoundManager();
+

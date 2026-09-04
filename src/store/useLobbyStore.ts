@@ -133,7 +133,7 @@ export const useLobbyStore = create<LobbyStore>((set, get) => ({
     // Real-Time Global Broadcast & Local Save
     await teamComStorage.broadcastCreateLobby(newLobby);
 
-    esportsSound.playCodeCopied();
+    esportsSound.playLobbyCreated();
     setTimeout(() => {
       set({ toastMessage: null });
     }, 4000);
